@@ -1,17 +1,22 @@
 from dotenv import load_dotenv
 import os
 from groq import Groq
+import speech_recognition as sr
+import time
 from PIL import ImageGrab, Image
 from openai import OpenAI
 import google.generativeai as genai
 from datetime import date
 import pyaudio
 from faster_whisper import WhisperModel
+import re
 
 load_dotenv()
 
 groqApiKey = os.getenv('groqApiKey')
 googleApiKey = os.getenv('googleApiKey')
+
+wakeWord = 'atlas'
 
 groqClient = Groq(api_key=groqApiKey)
 genai.configure(api_key=googleApiKey)
@@ -52,6 +57,9 @@ whisperModel = WhisperModel(
     cpu_threads=coresCount//2,
     num_workers=coresCount//2
 )
+
+r = sr.Recognizer()
+mic = sr.Microphone()
 
 def groqPrompt(prompt, imgContext):
     if imgContext:
@@ -121,6 +129,24 @@ def waveToText(audioPath):
     segments, _ = whisperModel.transcribe(audioPath)
     text = ' '.join([segment.text for segment in segments])
     return text
+
+def startListening():
+    with mic as m:
+        r.adjust_for_ambient_noise(m, duration=2)
+        print('\nDi ', wakeWord, ' seguito dal tuo comando.\n')
+        r.listen_in_background(m, callback)
+
+    while True:
+        time.sleep(.5)
+
+def extractPrompt(transcribedText, wakeWord):
+    pattern = rf'\b{re.escape(wakeWord)}[\s,.?!]*([A-Za-z0-9].*)'
+    match = re.search(pattern, transcribedText, re.IGNORECASE)
+
+    if match:
+        return match.group(1).strip()
+    else:
+        return None
 
 while True:
     prompt = input('USER: ')
