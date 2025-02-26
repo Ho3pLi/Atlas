@@ -6,6 +6,7 @@ from openai import OpenAI
 import google.generativeai as genai
 from datetime import date
 import pyaudio
+from faster_whisper import WhisperModel
 
 load_dotenv()
 
@@ -41,6 +42,16 @@ safetySettings = [
 ]
 
 model = genai.GenerativeModel('gemini-2.0-flash', safety_settings=safetySettings, generation_config=generationConfig)
+
+coresCount = os.cpu_count()
+whisperSize = 'base'
+whisperModel = WhisperModel(
+    whisperSize,
+    device='cpu',
+    compute_type='int8',
+    cpu_threads=coresCount//2,
+    num_workers=coresCount//2
+)
 
 def groqPrompt(prompt, imgContext):
     if imgContext:
@@ -105,6 +116,11 @@ def speak(text):
                 if max(chunk) > silenceThreshold:
                     playerStream.write(chunk)
                     streamStart = True
+
+def waveToText(audioPath):
+    segments, _ = whisperModel.transcribe(audioPath)
+    text = ' '.join([segment.text for segment in segments])
+    return text
 
 while True:
     prompt = input('USER: ')
