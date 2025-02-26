@@ -88,7 +88,7 @@ def functionCall(prompt):
     return response.content
 
 def takeScreenshot():
-    path = f'screenshot_{date.today().strftime("%d_%m_%Y")}.png'
+    path = f'screenshot.png'
     screenshot = ImageGrab.grab()
     rgbScreenshot = screenshot.convert('RGB')
     rgbScreenshot.save(path, quality=15)
@@ -130,6 +130,25 @@ def waveToText(audioPath):
     text = ' '.join([segment.text for segment in segments])
     return text
 
+def callback(recognizer, audio):
+    promptAudioPath = 'prompt.wav'
+    with open(promptAudioPath, 'wb') as f:
+        f.write(audio.get_wav_data())
+
+    promptText = waveToText(promptAudioPath)
+    cleanPrompt = extractPrompt(promptText, wakeWord)
+
+    if cleanPrompt:
+        print(f'User: {cleanPrompt}')
+        call = functionCall(cleanPrompt)
+        if 'take screenshot' in call:
+            takeScreenshot()
+            visualContext = visionPrompt(cleanPrompt, 'screenshot.png')
+        else:
+            visualContext = None
+    response = groqPrompt(cleanPrompt, visualContext)
+    print(f'Atlas: {response}')
+
 def startListening():
     with mic as m:
         r.adjust_for_ambient_noise(m, duration=2)
@@ -148,16 +167,18 @@ def extractPrompt(transcribedText, wakeWord):
     else:
         return None
 
-while True:
-    prompt = input('USER: ')
-    call = functionCall(prompt)
+startListening()
 
-    if 'take screenshot' in call:
-        takeScreenshot()
-        visualContext = visionPrompt(prompt, f'screenshot_{date.today().strftime("%d_%m_%Y")}.png')
-    else:
-        visualContext = None
+# while True:
+#     prompt = input('USER: ')
+#     call = functionCall(prompt)
 
-    response = groqPrompt(prompt, visualContext)
-    print(f'Atlas: {response}')
+#     if 'take screenshot' in call:
+#         takeScreenshot()
+#         visualContext = visionPrompt(prompt, f'screenshot_{date.today().strftime("%d_%m_%Y")}.png')
+#     else:
+#         visualContext = None
+
+#     response = groqPrompt(prompt, visualContext)
+#     print(f'Atlas: {response}')
 #    speak(response) # ENABLE ONLY FOR PRODUCTION TO REDUCE COSTS
