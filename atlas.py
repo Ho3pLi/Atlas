@@ -2,8 +2,10 @@ from dotenv import load_dotenv
 import os
 from groq import Groq
 from PIL import ImageGrab, Image
+from openai import OpenAI
 import google.generativeai as genai
 from datetime import date
+import pyaudio
 
 load_dotenv()
 
@@ -12,6 +14,7 @@ googleApiKey = os.getenv('googleApiKey')
 
 groqClient = Groq(api_key=groqApiKey)
 genai.configure(api_key=googleApiKey)
+openai = OpenAI(api_key=googleApiKey)
 
 sysMsg = (
     'You are a multi—modal AI voice assistant. Your name is Atlas. Your user may or may not have attached a photo for context '
@@ -84,6 +87,25 @@ def visionPrompt(prompt, photoPath):
     print(f'Vision: {response.text}')
     return response.text
 
+def speak(text):
+    playerStream = pyaudio.PyAudio().open(format=pyaudio.paInt16, channels=1, rate=24000, output=True)
+    streamStart = False
+
+    with openai.audio.speech.with_streaming_response.create(
+        model='tts-1',
+        voice='fable',
+        response_format='pcm',
+        input=text
+    ) as response:
+        silenceThreshold = 0.01
+        for chunk in response.iter_bytes(chunk_size=1024):
+            if streamStart:
+                playerStream.write(chunk)
+            else:
+                if max(chunk) > silenceThreshold:
+                    playerStream.write(chunk)
+                    streamStart = True
+
 while True:
     prompt = input('USER: ')
     call = functionCall(prompt)
@@ -96,3 +118,4 @@ while True:
 
     response = groqPrompt(prompt, visualContext)
     print(f'Atlas: {response}')
+#    speak(response) # ENABLE ONLY FOR PRODUCTION TO REDUCE COSTS
