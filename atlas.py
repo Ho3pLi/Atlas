@@ -17,7 +17,7 @@ groqApiKey = os.getenv('groqApiKey')
 googleApiKey = os.getenv('googleApiKey')
 openaiApiKey = os.getenv('openaiApiKey')
 
-wakeWord = 'marco'
+wakeWord = 'atlas'
 
 groqClient = Groq(api_key=groqApiKey)
 genai.configure(api_key=googleApiKey)
@@ -50,7 +50,7 @@ safetySettings = [
 model = genai.GenerativeModel('gemini-2.0-flash', safety_settings=safetySettings, generation_config=generationConfig)
 
 coresCount = os.cpu_count()
-whisperSize = 'base'
+whisperSize = 'medium'
 whisperModel = WhisperModel(
     whisperSize,
     device='cpu',
@@ -181,16 +181,18 @@ def extractPrompt(transcribedText, wakeWord):
 
 # startListening()
 
-while True:
-    prompt = input('USER: ')
-    call = functionCall(prompt)
+waveToText('prompt.wav')
 
-    if 'take screenshot' in call:
-        takeScreenshot()
-        visualContext = visionPrompt(prompt, f'screenshot.png')
-    else:
-        visualContext = None
+# while True:
+#     prompt = input('USER: ')
+#     call = functionCall(prompt)
 
-    response = groqPrompt(prompt, visualContext)
-    print(f'Atlas: {response}')
-    speak(response) # ENABLE ONLY FOR PRODUCTION TO REDUCE COSTS
+#     if 'take screenshot' in call:
+#         takeScreenshot()
+#         visualContext = visionPrompt(prompt, f'screenshot.png')
+#     else:
+#         visualContext = None
+
+#     response = groqPrompt(prompt, visualContext)
+#     print(f'Atlas: {response}')
+#     speak(response) # ENABLE ONLY FOR PRODUCTION TO REDUCE COSTS
