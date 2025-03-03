@@ -15,15 +15,16 @@ load_dotenv()
 
 groqApiKey = os.getenv('groqApiKey')
 googleApiKey = os.getenv('googleApiKey')
+openaiApiKey = os.getenv('openaiApiKey')
 
-wakeWord = 'atlas'
+wakeWord = 'marco'
 
 groqClient = Groq(api_key=groqApiKey)
 genai.configure(api_key=googleApiKey)
-openai = OpenAI(api_key=googleApiKey)
+openai = OpenAI(api_key=openaiApiKey)
 
 sysMsg = (
-    'You are a multi—modal AI voice assistant. Your name is Atlas. Your user may or may not have attached a photo for context '
+    'You are a multi—modal AI voice assistant. Your name is Atlas. You speak in italian. Your user may or may not have attached a photo for context '
     '(either a screenshot or a webcam capture). Any photo has already been processed into a highly detailed '
     'text prompt that witl be attached to their transcribed voice prompt. Generate the most useful and '
     'factual response possible, carefully considering all previous generated text in your response before '
@@ -62,7 +63,7 @@ r = sr.Recognizer()
 mic = sr.Microphone()
 
 def groqPrompt(prompt, imgContext):
-    if imgContext:
+    if imgContext and prompt:
         prompt = f'USER PROMPT: {prompt}\n\n    IMAGE CONTEXT: {imgContext}'
     convo.append({'role':'user', 'content':prompt})
     chatCompletion = groqClient.chat.completions.create(messages=convo, model='llama-3.3-70b-versatile')
@@ -71,6 +72,7 @@ def groqPrompt(prompt, imgContext):
     #         print("Prompt Feedback:", chatCompletion.prompt_feedback)
     response = chatCompletion.choices[0].message
     convo.append(response)
+    print('Groq response: ',response.content)
     return response.content
 
 def functionCall(prompt):
@@ -126,8 +128,9 @@ def speak(text):
                     streamStart = True
 
 def waveToText(audioPath):
-    segments, _ = whisperModel.transcribe(audioPath)
+    segments, _ = whisperModel.transcribe(audioPath, language='it')
     text = ' '.join([segment.text for segment in segments])
+    print('Wave to text: ', text)
     return text
 
 def callback(recognizer, audio):
@@ -138,6 +141,8 @@ def callback(recognizer, audio):
     promptText = waveToText(promptAudioPath)
     cleanPrompt = extractPrompt(promptText, wakeWord)
 
+    visualContext = None
+
     if cleanPrompt:
         print(f'User: {cleanPrompt}')
         call = functionCall(cleanPrompt)
@@ -146,39 +151,46 @@ def callback(recognizer, audio):
             visualContext = visionPrompt(cleanPrompt, 'screenshot.png')
         else:
             visualContext = None
-    response = groqPrompt(cleanPrompt, visualContext)
-    print(f'Atlas: {response}')
+        response = groqPrompt(cleanPrompt, visualContext)
+        speak(response)
 
 def startListening():
     with mic as m:
         r.adjust_for_ambient_noise(m, duration=2)
         print('\nDi ', wakeWord, ' seguito dal tuo comando.\n')
-        r.listen_in_background(m, callback)
+        
+    stopListening = r.listen_in_background(mic, callback)
 
-    while True:
-        time.sleep(.5)
+    try:
+        while True:
+            time.sleep(.5)
+    except KeyboardInterrupt:
+        stopListening(False)
+        print('Listening stopped.')
 
 def extractPrompt(transcribedText, wakeWord):
     pattern = rf'\b{re.escape(wakeWord)}[\s,.?!]*([A-Za-z0-9].*)'
     match = re.search(pattern, transcribedText, re.IGNORECASE)
+
+    print('Match in extractPrompt: ', match)
 
     if match:
         return match.group(1).strip()
     else:
         return None
 
-startListening()
+# startListening()
 
-# while True:
-#     prompt = input('USER: ')
-#     call = functionCall(prompt)
+while True:
+    prompt = input('USER: ')
+    call = functionCall(prompt)
 
-#     if 'take screenshot' in call:
-#         takeScreenshot()
-#         visualContext = visionPrompt(prompt, f'screenshot_{date.today().strftime("%d_%m_%Y")}.png')
-#     else:
-#         visualContext = None
+    if 'take screenshot' in call:
+        takeScreenshot()
+        visualContext = visionPrompt(prompt, f'screenshot.png')
+    else:
+        visualContext = None
 
-#     response = groqPrompt(prompt, visualContext)
-#     print(f'Atlas: {response}')
-#    speak(response) # ENABLE ONLY FOR PRODUCTION TO REDUCE COSTS
+    response = groqPrompt(prompt, visualContext)
+    print(f'Atlas: {response}')
+    speak(response) # ENABLE ONLY FOR PRODUCTION TO REDUCE COSTS
