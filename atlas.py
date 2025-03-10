@@ -10,6 +10,19 @@ from datetime import date
 import pyaudio
 from faster_whisper import WhisperModel
 import re
+import logging
+
+# Configurazione logging
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    level=logging.INFO,  # Cambia a DEBUG per più dettagli
+    handlers=[
+        logging.FileHandler("atlas.log"),  # Salva i log in un file
+        logging.StreamHandler()  # Mostra i log in console
+    ]
+)
+
+logging.info("Starting Atlas Assistant...")
 
 load_dotenv()
 
@@ -24,7 +37,7 @@ genai.configure(api_key=googleApiKey)
 openai = OpenAI(api_key=openaiApiKey)
 
 sysMsg = (
-    'You are a multi—modal AI voice assistant. Your name is Atlas. You speak in italian. Your user may or may not have attached a photo for context '
+    'You are a multi—modal AI voice assistant. Your name is Atlas. You speak italian. Your user may or may not have attached a photo for context '
     '(either a screenshot or a webcam capture). Any photo has already been processed into a highly detailed '
     'text prompt that witl be attached to their transcribed voice prompt. Generate the most useful and '
     'factual response possible, carefully considering all previous generated text in your response before '
@@ -49,6 +62,8 @@ safetySettings = [
 
 model = genai.GenerativeModel('gemini-2.0-flash', safety_settings=safetySettings, generation_config=generationConfig)
 
+enableTTS = True
+
 coresCount = os.cpu_count()
 whisperSize = 'medium'
 whisperModel = WhisperModel(
@@ -65,35 +80,44 @@ mic = sr.Microphone()
 def groqPrompt(prompt, imgContext):
     if imgContext and prompt:
         prompt = f'USER PROMPT: {prompt}\n\n    IMAGE CONTEXT: {imgContext}'
+
+    model = 'llama-3.1-8b-instant' if len(prompt) < 50 else 'llama-3.3-70b-versatile'
+    logging.info(f"[Groq] Sending request - Model: {model} | Prompt: {prompt}")
+
     convo.append({'role':'user', 'content':prompt})
-    chatCompletion = groqClient.chat.completions.create(messages=convo, model='llama-3.3-70b-versatile')
-    # if not chatCompletion.choices:
-    #     if hasattr(chatCompletion, "prompt_feedback"):
-    #         print("Prompt Feedback:", chatCompletion.prompt_feedback)
+    chatCompletion = groqClient.chat.completions.create(messages=convo, model=model)
     response = chatCompletion.choices[0].message
     convo.append(response)
-    print('Groq response: ',response.content)
+
+    logging.info(f"[Groq] Response received: {response.content[:100]}...")  # Mostriamo solo i primi 100 caratteri
+
     return response.content
 
 def functionCall(prompt):
+    logging.info(f"Does the prompt need special functions?: {prompt}")
+
     sysMsg = (
         'You are an AI function calling model. You will determine whether extracting the users clipboard content, '
         'taking a screenshot, capturing the webcam or calling no functions is best for a voice assistant to respond '
         'to the users prompt. The webcam can be assumed to be a normal laptop webcam facing the user. You will '
-        'respond with only one selection from this list: ["extract clipboard", "take screenshot", "capture webcam", "None"] \n'
-        'Do not respond with anything but the most logical selection from that list with no explanations. Format the '
-        'function call name exactly as I listed. '
+        'respond with only one selection from this list: ["extract clipboard", "take screenshot", "capture webcam", "None"]'
     )
+
     functionConvo = [{'role':'system', 'content':sysMsg}, {'role':'user', 'content':prompt}]
     chatCompletion = groqClient.chat.completions.create(messages=functionConvo, model='llama-3.3-70b-versatile')
     response = chatCompletion.choices[0].message
+
+    logging.info(f"Chosen function: {response.content}")
+
     return response.content
 
 def takeScreenshot():
     path = f'screenshot.png'
+    logging.info(f"Taking a screenshot in {path}...")
     screenshot = ImageGrab.grab()
     rgbScreenshot = screenshot.convert('RGB')
     rgbScreenshot.save(path, quality=15)
+    logging.info("Screenshot successfully saved.")
 
 def visionPrompt(prompt, photoPath):
     img = Image.open(photoPath)
@@ -109,6 +133,7 @@ def visionPrompt(prompt, photoPath):
     return response.text
 
 def speak(text):
+    logging.info("Generating audio with OpenAI TTS...")
     playerStream = pyaudio.PyAudio().open(format=pyaudio.paInt16, channels=1, rate=24000, output=True)
     streamStart = False
 
@@ -126,14 +151,19 @@ def speak(text):
                 if max(chunk) > silenceThreshold:
                     playerStream.write(chunk)
                     streamStart = True
+    logging.info("Audio successfully used.")
 
 def waveToText(audioPath):
+    logging.info(f"Transcribing audio: {audioPath}")
     segments, _ = whisperModel.transcribe(audioPath, language='it')
     text = ' '.join([segment.text for segment in segments])
-    print('Wave to text: ', text)
+
+    logging.info(f"Transcribed text: {text}")
     return text
 
 def callback(recognizer, audio):
+    logging.info("Audio received, thinking...")
+    
     promptAudioPath = 'prompt.wav'
     with open(promptAudioPath, 'wb') as f:
         f.write(audio.get_wav_data())
@@ -141,24 +171,30 @@ def callback(recognizer, audio):
     promptText = waveToText(promptAudioPath)
     cleanPrompt = extractPrompt(promptText, wakeWord)
 
+    if not cleanPrompt:
+        logging.warning("No prompt detected, try again.")
+        return
+
+    logging.info(f"Prompt detected: {cleanPrompt}")
+
+    call = functionCall(cleanPrompt)
     visualContext = None
 
-    if cleanPrompt:
-        print(f'User: {cleanPrompt}')
-        call = functionCall(cleanPrompt)
-        if 'take screenshot' in call:
-            takeScreenshot()
-            visualContext = visionPrompt(cleanPrompt, 'screenshot.png')
-        else:
-            visualContext = None
-        response = groqPrompt(cleanPrompt, visualContext)
+    if 'take screenshot' in call:
+        takeScreenshot()
+        visualContext = visionPrompt(cleanPrompt, 'screenshot.png')
+
+    response = groqPrompt(cleanPrompt, visualContext)
+    logging.info(f"Assistant response: {response}")
+
+    if enableTTS:
         speak(response)
 
 def startListening():
     with mic as m:
         r.adjust_for_ambient_noise(m, duration=2)
-        print('\nDi ', wakeWord, ' seguito dal tuo comando.\n')
-        
+        logging.info(f"Starting up the Assistnat. Say '{wakeWord}' followed by your prompt.")
+
     stopListening = r.listen_in_background(mic, callback)
 
     try:
@@ -166,22 +202,24 @@ def startListening():
             time.sleep(.5)
     except KeyboardInterrupt:
         stopListening(False)
-        print('Listening stopped.')
+        logging.info("Assistant killed :(")
 
 def extractPrompt(transcribedText, wakeWord):
+    logging.info(f"Extracting prompt from phrase: {transcribedText}")
+
     pattern = rf'\b{re.escape(wakeWord)}[\s,.?!]*([A-Za-z0-9].*)'
     match = re.search(pattern, transcribedText, re.IGNORECASE)
 
-    print('Match in extractPrompt: ', match)
-
     if match:
+        logging.info(f"Prompt extracted: {match.group(1).strip()}")
         return match.group(1).strip()
     else:
+        logging.warning("No prompt found in the phrase.")
         return None
 
-# startListening()
+startListening()
 
-waveToText('prompt.wav')
+# waveToText('prompt.wav')
 
 # while True:
 #     prompt = input('USER: ')
