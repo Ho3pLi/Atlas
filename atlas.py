@@ -12,6 +12,7 @@ import pyaudio
 from faster_whisper import WhisperModel
 import re
 import logging
+import difflib
 
 # Configurazione logging
 logging.basicConfig(
@@ -63,7 +64,7 @@ safetySettings = [
 
 model = genai.GenerativeModel('gemini-2.0-flash', safety_settings=safetySettings, generation_config=generationConfig)
 
-enableTTS = True
+enableTTS = False
 
 allowedDirs = [os.path.expanduser('~/Documents'), os.path.expanduser('~/Desktop')]
 lastFoundFilePath = None
@@ -81,9 +82,11 @@ whisperModel = WhisperModel(
 r = sr.Recognizer()
 mic = sr.Microphone()
 
-def groqPrompt(prompt, imgContext):
+def groqPrompt(prompt, imgContext, filePath):
     if imgContext and prompt:
         prompt = f'USER PROMPT: {prompt}\n\n    IMAGE CONTEXT: {imgContext}'
+    elif filePath and prompt:
+        prompt = f'USER PROMPT: {prompt}\n\n    PATH CONTEXT: {filePath}'
 
     model = 'llama-3.1-8b-instant' if len(prompt) < 50 else 'llama-3.3-70b-versatile'
     logging.info(f"[Groq] Sending request - Model: {model} | Prompt: {prompt}")
@@ -93,7 +96,8 @@ def groqPrompt(prompt, imgContext):
     response = chatCompletion.choices[0].message
     convo.append(response)
 
-    logging.info(f"[Groq] Response received: {response.content[:100]}...")  # Mostriamo solo i primi 100 caratteri
+    # logging.info(f"[Groq] Response received: {response.content[:100]}...")  # Mostriamo solo i primi 100 caratteri
+    logging.info(f"[Groq] Response received: {response.content}")
 
     return response.content
 
@@ -102,9 +106,9 @@ def functionCall(prompt):
 
     sysMsg = (
         'You are an AI function calling model. You will determine whether extracting the users clipboard content, '
-        'taking a screenshot, capturing the webcam or calling no functions is best for a voice assistant to respond '
+        'taking a screenshot, search for a file or calling no functions is best for a voice assistant to respond '
         'to the users prompt. The webcam can be assumed to be a normal laptop webcam facing the user. You will '
-        'respond with only one selection from this list: ["extract clipboard", "take screenshot", "capture webcam", "None"]'
+        'respond with only one selection from this list: ["extract clipboard", "take screenshot", "search file", "None"]'
     )
 
     functionConvo = [{'role':'system', 'content':sysMsg}, {'role':'user', 'content':prompt}]
@@ -145,9 +149,23 @@ def extractFileInfo(prompt):
     response = chatCompletion.choices[0].message.content
     return json.loads(response)
 
-def searchFile(filename, extension=None, allowedDirs=allowedDirs):
-    found_files = []
+def extractSemanticKeywords(prompt):
+    sysMsg = (
+        "You are a semantic keyword extractor. "
+        "Given a user prompt, generate a short list (5-10) of related keywords that might match filenames "
+        "on a user's computer. Return only a JSON array of keywords."
+    )
 
+    chatCompletion = groqClient.chat.completions.create(
+        messages=[{'role':'system', 'content':sysMsg}, {'role':'user', 'content':prompt}],
+        model='llama-3.1-8b-instant'
+    )
+
+    response = chatCompletion.choices[0].message.content
+    return json.loads(response)
+
+def exactSearch(filename, extension, allowedDirs=allowedDirs):
+    results = []
     for base_dir in allowedDirs:
         expanded_dir = os.path.expanduser(base_dir)
         for root, dirs, files in os.walk(expanded_dir):
@@ -155,42 +173,82 @@ def searchFile(filename, extension=None, allowedDirs=allowedDirs):
             files = [f for f in files if not f.startswith('.')]
 
             for file in files:
-                file_name, file_ext = os.path.splitext(file)
-
-                if extension:
-                    if file_name.lower() == filename.lower() and file_ext.lower() == extension.lower():
-                        return os.path.join(root, file)
+                name, ext = os.path.splitext(file)
+                if extension != "NONE":
+                    if name.lower() == filename.lower() and ext.lower() == extension.lower():
+                        results.append(os.path.join(root, file))
                 else:
-                    if file_name.lower() == filename.lower():
-                        found_files.append(os.path.join(root, file))
+                    if name.lower() == filename.lower():
+                        results.append(os.path.join(root, file))
+    logging.info(f'exactSearch res: {results}')
+    return results
 
-    if not found_files:
-        return None
-    elif len(found_files) == 1:
-        return found_files[0]
-    else:
-        return found_files
+def fuzzySearch(filename, allowedDirs=allowedDirs, cutoff=0.8):
+    results = []
+    for base_dir in allowedDirs:
+        expanded_dir = os.path.expanduser(base_dir)
+        for root, dirs, files in os.walk(expanded_dir):
+            dirs[:] = [d for d in dirs if not d.startswith('.')]
+            files = [f for f in files if not f.startswith('.')]
+
+            file_names = [os.path.splitext(f)[0] for f in files]
+            close_matches = difflib.get_close_matches(filename.lower(), file_names, n=10, cutoff=cutoff)
+
+            for match in close_matches:
+                for file in files:
+                    if match == os.path.splitext(file)[0].lower():
+                        results.append(os.path.join(root, file))
+
+    logging.info(f'fuzzySearch res: {results}')
+    return results
+
+def semanticSearch(keywords, allowedDirs=allowedDirs):
+    matches = []
+    for base_dir in allowedDirs:
+        expanded_dir = os.path.expanduser(base_dir)
+        for root, dirs, files in os.walk(expanded_dir):
+            dirs[:] = [d for d in dirs if not d.startswith('.')]
+            files = [f for f in files if not f.startswith('.')]
+
+            for file in files:
+                if any(kw.lower() in file.lower() for kw in keywords):
+                    matches.append(os.path.join(root, file))
+
+    logging.info(f'semanticSearch: {matches}')
+    return matches
 
 def handleFileSearchPrompt(prompt):
     info = extractFileInfo(prompt)
+    filename, extension = info["filename"], info["extension"]
 
-    extension = None if info["extension"] == "NONE" else info["extension"]
+    all_results = set()
 
-    logging.info(f"Extracted file info: filename = {info['filename']}, extension = {extension}")
+    exact_results = exactSearch(filename, extension, allowedDirs)
+    all_results.update(exact_results)
 
-    paths = searchFile(info["filename"], extension=extension)
+    if len(all_results) < 5:
+        fuzzy_results = fuzzySearch(filename, allowedDirs)
+        all_results.update(fuzzy_results)
 
-    if not paths:
-        response = "I'm sorry, I couldn't find the requested file."
-    elif isinstance(paths, list):
-        response = "I've found multiple files:\n"
-        for idx, file in enumerate(paths, start=1):
+    if len(all_results) < 5:
+        semantic_keywords = extractSemanticKeywords(prompt)
+        semantic_results = semanticSearch(semantic_keywords, allowedDirs)
+        all_results.update(semantic_results)
+
+    if not all_results:
+        response = "I'm sorry, I couldn't find any files matching your request."
+    elif len(all_results) == 1:
+        path = list(all_results)[0]
+        response = f"I've found the requested file:\n {path}"
+    else:
+        response = "I've found multiple files possibly matching your request:\n"
+        for idx, file in enumerate(all_results, start=1):
             response += f"{idx}. {file}\n"
         response += "Please specify which one you want."
-    else:
-        response = f"I've found the requested file: {paths}"
 
+    print(f"Assistant Response: {response}")
     return response
+
 
 def visionPrompt(prompt, photoPath):
     img = Image.open(photoPath)
@@ -233,7 +291,7 @@ def waveToText(audioPath):
     logging.info(f"Transcribed text: {text}")
     return text
 
-def callback(recognizer, audio):
+def callback(audio):
     logging.info("Audio received, thinking...")
     
     promptAudioPath = 'prompt.wav'
@@ -251,12 +309,15 @@ def callback(recognizer, audio):
 
     call = functionCall(cleanPrompt)
     visualContext = None
+    filePath = None
 
     if 'take screenshot' in call:
         takeScreenshot()
         visualContext = visionPrompt(cleanPrompt, 'screenshot.png')
+    elif 'search file' in call:
+        filePath = handleFileSearchPrompt(cleanPrompt)
 
-    response = groqPrompt(cleanPrompt, visualContext)
+    response = groqPrompt(cleanPrompt, visualContext, filePath)
     logging.info(f"Assistant response: {response}")
 
     if enableTTS:
@@ -289,22 +350,25 @@ def extractPrompt(transcribedText, wakeWord):
         logging.warning("No prompt found in the phrase.")
         return None
 
-print(handleFileSearchPrompt("Atlas, trova il file dell'universita"))
+# print(handleFileSearchPrompt("Atlas, trova il file tesi"))
 
 # startListening()
 
 # waveToText('prompt.wav')
 
-# while True:
-#     prompt = input('USER: ')
-#     call = functionCall(prompt)
+while True:
+    prompt = input('USER: ')
+    call = functionCall(prompt)
+    visualContext = None
+    filePath = None
 
-#     if 'take screenshot' in call:
-#         takeScreenshot()
-#         visualContext = visionPrompt(prompt, f'screenshot.png')
-#     else:
-#         visualContext = None
+    if 'take screenshot' in call:
+        takeScreenshot()
+        visualContext = visionPrompt(prompt, 'screenshot.png')
+    elif 'search file' in call:
+        filePath = handleFileSearchPrompt(prompt)
 
-#     response = groqPrompt(prompt, visualContext)
-#     print(f'Atlas: {response}')
-#     speak(response) # ENABLE ONLY FOR PRODUCTION TO REDUCE COSTS
+    response = groqPrompt(prompt, visualContext, filePath)
+
+    if enableTTS:
+        speak(response)
