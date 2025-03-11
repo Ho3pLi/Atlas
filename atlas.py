@@ -1,3 +1,4 @@
+import json
 from dotenv import load_dotenv
 import os
 from groq import Groq
@@ -15,10 +16,10 @@ import logging
 # Configurazione logging
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.INFO,  # Cambia a DEBUG per più dettagli
+    level=logging.INFO,
     handlers=[
-        logging.FileHandler("atlas.log"),  # Salva i log in un file
-        logging.StreamHandler()  # Mostra i log in console
+        logging.FileHandler("atlas.log"),
+        logging.StreamHandler()
     ]
 )
 
@@ -63,6 +64,9 @@ safetySettings = [
 model = genai.GenerativeModel('gemini-2.0-flash', safety_settings=safetySettings, generation_config=generationConfig)
 
 enableTTS = True
+
+allowedDirs = [os.path.expanduser('~/Documents'), os.path.expanduser('~/Desktop')]
+lastFoundFilePath = None
 
 coresCount = os.cpu_count()
 whisperSize = 'medium'
@@ -119,6 +123,75 @@ def takeScreenshot():
     rgbScreenshot.save(path, quality=15)
     logging.info("Screenshot successfully saved.")
 
+def extractFileInfo(prompt):
+    sysMsg = (
+        'You are a model that precisely extracts information from user requests. '
+        'You will receive a sentence in which the user asks to search for a file on the PC. '
+        'You must identify and return ONLY the exact filename and its extension (only if explicitly stated). '
+        'ATTENTION: Do NOT invent or infer extensions not explicitly stated by the user. '
+        'If the user does NOT clearly mention an extension, return "NONE". '
+        'Examples:\n'
+        '- "Find the pdf of the thesis" -> {"filename":"thesis","extension":".pdf"}\n'
+        '- "Look for the file pippo.docx" -> {"filename":"pippo","extension":".docx"}\n'
+        '- "Find pippo" -> {"filename":"pippo","extension":"NONE"}\n'
+        '- "Search for the file balance" -> {"filename":"balance","extension":"NONE"}\n'
+        'ALWAYS respond in this exact JSON format: {"filename":"filename", "extension":".ext"} or {"filename":"filename", "extension":"NONE"}'
+    )
+
+    chatCompletion = groqClient.chat.completions.create(
+        messages=[{'role':'system', 'content':sysMsg}, {'role':'user', 'content':prompt}],
+        model='llama-3.1-8b-instant'  
+    )
+    response = chatCompletion.choices[0].message.content
+    return json.loads(response)
+
+def searchFile(filename, extension=None, allowedDirs=allowedDirs):
+    found_files = []
+
+    for base_dir in allowedDirs:
+        expanded_dir = os.path.expanduser(base_dir)
+        for root, dirs, files in os.walk(expanded_dir):
+            dirs[:] = [d for d in dirs if not d.startswith('.')]
+            files = [f for f in files if not f.startswith('.')]
+
+            for file in files:
+                file_name, file_ext = os.path.splitext(file)
+
+                if extension:
+                    if file_name.lower() == filename.lower() and file_ext.lower() == extension.lower():
+                        return os.path.join(root, file)
+                else:
+                    if file_name.lower() == filename.lower():
+                        found_files.append(os.path.join(root, file))
+
+    if not found_files:
+        return None
+    elif len(found_files) == 1:
+        return found_files[0]
+    else:
+        return found_files
+
+def handleFileSearchPrompt(prompt):
+    info = extractFileInfo(prompt)
+
+    extension = None if info["extension"] == "NONE" else info["extension"]
+
+    logging.info(f"Extracted file info: filename = {info['filename']}, extension = {extension}")
+
+    paths = searchFile(info["filename"], extension=extension)
+
+    if not paths:
+        response = "I'm sorry, I couldn't find the requested file."
+    elif isinstance(paths, list):
+        response = "I've found multiple files:\n"
+        for idx, file in enumerate(paths, start=1):
+            response += f"{idx}. {file}\n"
+        response += "Please specify which one you want."
+    else:
+        response = f"I've found the requested file: {paths}"
+
+    return response
+
 def visionPrompt(prompt, photoPath):
     img = Image.open(photoPath)
     prompt = (
@@ -129,7 +202,6 @@ def visionPrompt(prompt, photoPath):
         f'assistant who will respond to the user. \nUSER PROMPT: {prompt}'
     )
     response = model.generate_content([prompt, img])
-    print(f'Vision: {response.text}')
     return response.text
 
 def speak(text):
@@ -217,7 +289,9 @@ def extractPrompt(transcribedText, wakeWord):
         logging.warning("No prompt found in the phrase.")
         return None
 
-startListening()
+print(handleFileSearchPrompt("Atlas, trova il file dell'universita"))
+
+# startListening()
 
 # waveToText('prompt.wav')
 
