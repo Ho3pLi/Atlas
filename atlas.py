@@ -7,12 +7,13 @@ import time
 from PIL import ImageGrab, Image
 from openai import OpenAI
 import google.generativeai as genai
-from datetime import date
+from datetime import datetime, timedelta
 import pyaudio
 from faster_whisper import WhisperModel
 import re
 import logging
 import difflib
+import requests
 
 # Configurazione logging
 logging.basicConfig(
@@ -31,6 +32,7 @@ load_dotenv()
 groqApiKey = os.getenv('groqApiKey')
 googleApiKey = os.getenv('googleApiKey')
 openaiApiKey = os.getenv('openaiApiKey')
+openWeatherApiKey = os.getenv('openWeatherApiKey')
 
 wakeWord = 'atlas'
 
@@ -82,11 +84,13 @@ whisperModel = WhisperModel(
 r = sr.Recognizer()
 mic = sr.Microphone()
 
-def groqPrompt(prompt, imgContext, filePath):
+def groqPrompt(prompt, imgContext, filePath, weatherData):
     if imgContext and prompt:
         prompt = f'USER PROMPT: {prompt}\n\n    IMAGE CONTEXT: {imgContext}'
     elif filePath and prompt:
         prompt = f'USER PROMPT: {prompt}\n\n    PATH CONTEXT: {filePath}'
+    elif weatherData and prompt:
+        prompt = f'USER PROMPT: {prompt}\n\n    WEATHER CONTEXT: {weatherData}'
 
     model = 'llama-3.1-8b-instant' if len(prompt) < 50 else 'llama-3.3-70b-versatile'
     logging.info(f"[Groq] Sending request - Model: {model} | Prompt: {prompt}")
@@ -105,10 +109,10 @@ def functionCall(prompt):
     logging.info(f"Does the prompt need special functions?: {prompt}")
 
     sysMsg = (
-        'You are an AI function calling model. You will determine whether extracting the users clipboard content, '
+        'You are an AI function calling model. You will determine whether search for weather, '
         'taking a screenshot, search for a file or calling no functions is best for a voice assistant to respond '
         'to the users prompt. The webcam can be assumed to be a normal laptop webcam facing the user. You will '
-        'respond with only one selection from this list: ["extract clipboard", "take screenshot", "search file", "None"]'
+        'respond with only one selection from this list: ["get weather", "take screenshot", "search file", "None"]'
     )
 
     functionConvo = [{'role':'system', 'content':sysMsg}, {'role':'user', 'content':prompt}]
@@ -249,6 +253,93 @@ def handleFileSearchPrompt(prompt):
     print(f"Assistant Response: {response}")
     return response
 
+def getWeather(city, lang="it", units="metric", date='today'):
+    baseUrl = "http://api.openweathermap.org/data/2.5/"
+    # url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={openWeatherApiKey}&lang={lang}&units={units}"
+    # response = requests.get(url)
+    
+    # if response.status_code == 200:
+    #     weather_data = response.json()
+        
+    #     description = weather_data["weather"][0]["description"]
+    #     temp = weather_data["main"]["temp"]
+    #     feels_like = weather_data["main"]["feels_like"]
+    #     humidity = weather_data["main"]["humidity"]
+
+    #     result = (f"Current weather in {city}:\n"
+    #               f"- Weather: {description}\n"
+    #               f"- Temperature: {temp}°C (Feel like: {feels_like}°C)\n"
+    #               f"- Umidity: {humidity}%")
+    #     return result
+    # else:
+    #     return f"Can't find data for {city}."
+    
+    if date == 'today':
+        url = f"{baseUrl}weather?q={city}&appid={openWeatherApiKey}&units={units}&lang={lang}"
+        response = requests.get(url).json()
+        
+        if response.get('cod') != 200:
+            return "I'm sorry, I couldn't retrieve today's weather."
+        
+        weather_desc = response['weather'][0]['description']
+        temp = response['main']['temp']
+        return f"Today's weather in {city}: {weather_desc}, temperature {temp}°C."
+    else:
+        url = f"{baseUrl}forecast?q={city}&appid={openWeatherApiKey}&units={units}&lang={lang}"
+        response = requests.get(url).json()
+
+        if response.get('cod') != "200":
+            return "I'm sorry, I couldn't retrieve the forecast."
+
+        if date == 'tomorrow':
+            target_date = (datetime.now() + timedelta(days=1)).date()
+        else:
+            target_date = datetime.strptime(date, '%Y-%m-%d').date() #FIXME - weekday to fix
+
+        forecasts = response['list']
+        target_forecasts = [f for f in forecasts if datetime.fromtimestamp(f['dt']).date() == target_date]
+
+        if not target_forecasts:
+            return f"I'm sorry, I couldn't find weather information for {date}."
+
+        # Media delle temperature della giornata
+        avg_temp = sum([f['main']['temp'] for f in target_forecasts]) / len(target_forecasts)
+        weather_desc = target_forecasts[0]['weather'][0]['description']
+
+        formatted_date = target_date.strftime("%Y-%m-%d")
+        return f"Weather in {city} on {formatted_date}: {weather_desc}, average temperature {avg_temp:.1f}°C."
+    
+def extractWeatherInfo(prompt):
+    sysMsg = (
+        "You are a model that extracts ONLY the city name and the requested date from a user's weather-related request.\n"
+        "If the user mentions 'tomorrow', return 'tomorrow'. If a specific date is given, return it in YYYY-MM-DD format.\n"
+        "If a weekday is given, return the date of the closest weekday matching the request in YYYY-MM-DD format.\n"
+        "If no date is mentioned, return 'today'.\n"
+        "Examples:\n"
+        "- 'What's the weather like in Rome tomorrow?' -> {\"city\":\"Rome\",\"date\":\"tomorrow\"}\n"
+        "- 'Weather in Paris on 2024-03-12' -> {\"city\":\"Paris\",\"date\":\"2024-03-12\"}\n"
+        "- 'Weather in Milan' -> {\"city\":\"Milan\",\"date\":\"today\"}\n"
+        "Always respond with JSON format: {\"city\":\"city_name\",\"date\":\"YYYY-MM-DD/tomorrow/today\"}"
+    )
+
+    chatCompletion = groqClient.chat.completions.create(
+        messages=[{'role':'system', 'content':sysMsg}, {'role':'user', 'content':prompt}],
+        model='llama-3.1-8b-instant'
+    )
+
+    response = chatCompletion.choices[0].message.content
+    logging.info(f'{response}')
+    return json.loads(response)
+
+def handleWeatherPrompt(prompt):
+    info = extractWeatherInfo(prompt)
+    city = info['city']
+    date = info['date']
+    logging.info(f"Weather requested for: City={city}, Date={date}")
+
+    weatherReport = getWeather(city=city, date=date)
+    logging.info(f'Weather report: {weatherReport}')
+    return weatherReport
 
 def visionPrompt(prompt, photoPath):
     img = Image.open(photoPath)
@@ -310,14 +401,17 @@ def callback(audio):
     call = functionCall(cleanPrompt)
     visualContext = None
     filePath = None
+    weatherData = None
 
     if 'take screenshot' in call:
         takeScreenshot()
         visualContext = visionPrompt(cleanPrompt, 'screenshot.png')
     elif 'search file' in call:
         filePath = handleFileSearchPrompt(cleanPrompt)
+    elif 'get weather' in call:
+        weatherData = handleWeatherPrompt(cleanPrompt)
 
-    response = groqPrompt(cleanPrompt, visualContext, filePath)
+    response = groqPrompt(cleanPrompt, visualContext, filePath, weatherData)
     logging.info(f"Assistant response: {response}")
 
     if enableTTS:
@@ -361,14 +455,17 @@ while True:
     call = functionCall(prompt)
     visualContext = None
     filePath = None
+    weatherData = None
 
     if 'take screenshot' in call:
         takeScreenshot()
         visualContext = visionPrompt(prompt, 'screenshot.png')
     elif 'search file' in call:
         filePath = handleFileSearchPrompt(prompt)
+    elif 'get weather' in call:
+        weatherData = handleWeatherPrompt(prompt)
 
-    response = groqPrompt(prompt, visualContext, filePath)
+    response = groqPrompt(prompt, visualContext, filePath, weatherData)
 
     if enableTTS:
         speak(response)
