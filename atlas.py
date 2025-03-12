@@ -15,7 +15,6 @@ import logging
 import difflib
 import requests
 
-# Configurazione logging
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO,
@@ -86,11 +85,11 @@ mic = sr.Microphone()
 
 def groqPrompt(prompt, imgContext, filePath, weatherData):
     if imgContext and prompt:
-        prompt = f'USER PROMPT: {prompt}\n\n    IMAGE CONTEXT: {imgContext}'
+        prompt = f'\n\nUSER PROMPT: {prompt}\n\nIMAGE CONTEXT: {imgContext}\n'
     elif filePath and prompt:
-        prompt = f'USER PROMPT: {prompt}\n\n    PATH CONTEXT: {filePath}'
+        prompt = f'\n\nUSER PROMPT: {prompt}\n\nPATH CONTEXT: {filePath}\n'
     elif weatherData and prompt:
-        prompt = f'USER PROMPT: {prompt}\n\n    WEATHER CONTEXT: {weatherData}'
+        prompt = f'\n\nUSER PROMPT: {prompt}\n\nWEATHER CONTEXT: {weatherData}\n'
 
     model = 'llama-3.1-8b-instant' if len(prompt) < 50 else 'llama-3.3-70b-versatile'
     logging.info(f"[Groq] Sending request - Model: {model} | Prompt: {prompt}")
@@ -106,8 +105,6 @@ def groqPrompt(prompt, imgContext, filePath, weatherData):
     return response.content
 
 def functionCall(prompt):
-    logging.info(f"Does the prompt need special functions?: {prompt}")
-
     sysMsg = (
         'You are an AI function calling model. You will determine whether search for weather, '
         'taking a screenshot, search for a file or calling no functions is best for a voice assistant to respond '
@@ -255,25 +252,7 @@ def handleFileSearchPrompt(prompt):
 
 def getWeather(city, lang="it", units="metric", date='today'):
     baseUrl = "http://api.openweathermap.org/data/2.5/"
-    # url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={openWeatherApiKey}&lang={lang}&units={units}"
-    # response = requests.get(url)
-    
-    # if response.status_code == 200:
-    #     weather_data = response.json()
-        
-    #     description = weather_data["weather"][0]["description"]
-    #     temp = weather_data["main"]["temp"]
-    #     feels_like = weather_data["main"]["feels_like"]
-    #     humidity = weather_data["main"]["humidity"]
 
-    #     result = (f"Current weather in {city}:\n"
-    #               f"- Weather: {description}\n"
-    #               f"- Temperature: {temp}°C (Feel like: {feels_like}°C)\n"
-    #               f"- Umidity: {humidity}%")
-    #     return result
-    # else:
-    #     return f"Can't find data for {city}."
-    
     if date == 'today':
         url = f"{baseUrl}weather?q={city}&appid={openWeatherApiKey}&units={units}&lang={lang}"
         response = requests.get(url).json()
@@ -294,7 +273,7 @@ def getWeather(city, lang="it", units="metric", date='today'):
         if date == 'tomorrow':
             target_date = (datetime.now() + timedelta(days=1)).date()
         else:
-            target_date = datetime.strptime(date, '%Y-%m-%d').date() #FIXME - weekday to fix
+            target_date = datetime.strptime(date, '%Y-%m-%d').date()
 
         forecasts = response['list']
         target_forecasts = [f for f in forecasts if datetime.fromtimestamp(f['dt']).date() == target_date]
@@ -302,24 +281,21 @@ def getWeather(city, lang="it", units="metric", date='today'):
         if not target_forecasts:
             return f"I'm sorry, I couldn't find weather information for {date}."
 
-        # Media delle temperature della giornata
         avg_temp = sum([f['main']['temp'] for f in target_forecasts]) / len(target_forecasts)
         weather_desc = target_forecasts[0]['weather'][0]['description']
 
         formatted_date = target_date.strftime("%Y-%m-%d")
-        return f"Weather in {city} on {formatted_date}: {weather_desc}, average temperature {avg_temp:.1f}°C."
-    
+        return f"in {city} on {formatted_date}: {weather_desc}, average temperature {avg_temp:.1f}°C."
+
 def extractWeatherInfo(prompt):
     sysMsg = (
-        "You are a model that extracts ONLY the city name and the requested date from a user's weather-related request.\n"
-        "If the user mentions 'tomorrow', return 'tomorrow'. If a specific date is given, return it in YYYY-MM-DD format.\n"
-        "If a weekday is given, return the date of the closest weekday matching the request in YYYY-MM-DD format.\n"
-        "If no date is mentioned, return 'today'.\n"
+        "You extract ONLY the city name and the date from the user's request.\n"
         "Examples:\n"
-        "- 'What's the weather like in Rome tomorrow?' -> {\"city\":\"Rome\",\"date\":\"tomorrow\"}\n"
+        "- 'What's the weather in Rome tomorrow?' -> {\"city\":\"Rome\",\"date\":\"tomorrow\"}\n"
         "- 'Weather in Paris on 2024-03-12' -> {\"city\":\"Paris\",\"date\":\"2024-03-12\"}\n"
-        "- 'Weather in Milan' -> {\"city\":\"Milan\",\"date\":\"today\"}\n"
-        "Always respond with JSON format: {\"city\":\"city_name\",\"date\":\"YYYY-MM-DD/tomorrow/today\"}"
+        "- 'Weather in Milan friday' -> {\"city\":\"Milan\",\"date\":\"friday\"}\n"
+        "- 'Weather in Rho' -> {\"city\":\"Rho\",\"date\":\"today\"}\n"
+        "Respond always in JSON: {\"city\":\"city_name\",\"date\":\"YYYY-MM-DD/tomorrow/today/weekday\"}"
     )
 
     chatCompletion = groqClient.chat.completions.create(
@@ -328,14 +304,39 @@ def extractWeatherInfo(prompt):
     )
 
     response = chatCompletion.choices[0].message.content
-    logging.info(f'{response}')
-    return json.loads(response)
+    data = json.loads(response)
+
+    date_str = data["date"].lower()
+    today = datetime.today()
+
+    if date_str == 'today':
+        target_date = today
+    elif date_str == 'tomorrow':
+        target_date = today + timedelta(days=1)
+    elif date_str in ['lunedi','martedi','mercoledi','giovedi','venerdi','sabato','domenica']:
+        target_date = next_weekday(today, date_str)
+    else:
+        target_date = datetime.strptime(date_str, '%Y-%m-%d')
+
+    data['date'] = target_date.strftime('%Y-%m-%d')
+    return data
+
+def next_weekday(d, weekday_name):
+    weekdays = {
+        'lunedi': 0, 'martedi': 1, 'mercoledi': 2,
+        'giovedi': 3, 'venerdi': 4, 'sabato': 5, 'domenica': 6
+    }
+    weekday = weekdays[weekday_name.lower()]
+    days_ahead = weekday - d.weekday()
+    if days_ahead <= 0:
+        days_ahead += 7
+    return d + timedelta(days=days_ahead)
 
 def handleWeatherPrompt(prompt):
     info = extractWeatherInfo(prompt)
     city = info['city']
     date = info['date']
-    logging.info(f"Weather requested for: City={city}, Date={date}")
+    logging.info(f"Weather requested for: City = {city}, Date = {date}")
 
     weatherReport = getWeather(city=city, date=date)
     logging.info(f'Weather report: {weatherReport}')
