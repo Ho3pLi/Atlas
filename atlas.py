@@ -33,7 +33,7 @@ googleApiKey = os.getenv('googleApiKey')
 openaiApiKey = os.getenv('openaiApiKey')
 openWeatherApiKey = os.getenv('openWeatherApiKey')
 
-wakeWord = 'atlas'
+wakeWord = 'atlas' #NOTE - toDefine se usare porcupine o snowboy
 
 groqClient = Groq(api_key=groqApiKey)
 genai.configure(api_key=googleApiKey)
@@ -68,7 +68,7 @@ model = genai.GenerativeModel('gemini-2.0-flash', safety_settings=safetySettings
 enableTTS = False
 
 allowedDirs = [os.path.expanduser('~/Documents'), os.path.expanduser('~/Desktop')]
-lastFoundFilePath = None
+lastFileSearchResults = []
 
 coresCount = os.cpu_count()
 whisperSize = 'medium'
@@ -218,7 +218,54 @@ def semanticSearch(keywords, allowedDirs=allowedDirs):
     logging.info(f'semanticSearch: {matches}')
     return matches
 
+def handleFileChoice(user_choice, file_list):
+    
+    prompt_llm = (
+        "You are a model that extracts exactly ONE filename from a user's choice.\n"
+        "You receive a numbered list of filenames and the user's spoken choice.\n"
+        "List:\n\n"
+        f"{[os.path.basename(f) for f in file_list]}\n\n"
+        f"User choice: '{user_choice}'\n\n"
+        "You MUST return ONLY the exact filename from the provided list matching the user's choice.\n"
+        "Do NOT add any explanations, punctuation, or extra words.\n"
+        "Examples:\n"
+        "List:\n"
+        "1. thesis.pdf\n"
+        "2. notes.docx\n"
+        "3. lecture.txt\n"
+        "\nUser choice: 'I want thesis pdf'\n"
+        "Your response: thesis.pdf\n"
+        "\nUser choice: 'the notes'\n"
+        "Your response: notes.docx\n"
+        "\nUser choice: 'lecture file'\n"
+        "Your response: lecture.txt\n"
+        "\nRespond ONLY with the exact filename, nothing else."
+    )
+
+
+    response = groqClient.chat.completions.create(
+        messages=[
+            {'role':'system', 'content': prompt_llm}
+        ],
+        model='llama-3.1-8b-instant'
+    )
+
+    chosen_filename = response.choices[0].message.content.strip()
+
+    logging.info(f"LLM extracted file choice: {chosen_filename}")
+
+    if chosen_filename == 'NONE':
+        return None
+
+    for path in file_list:
+        if os.path.basename(path) == chosen_filename:
+            return path
+        
+    return None
+
 def handleFileSearchPrompt(prompt):
+    global lastFileSearchResults
+
     info = extractFileInfo(prompt)
     filename, extension = info["filename"], info["extension"]
 
@@ -238,16 +285,19 @@ def handleFileSearchPrompt(prompt):
 
     if not all_results:
         response = "I'm sorry, I couldn't find any files matching your request."
+        lastFileSearchResults = []
     elif len(all_results) == 1:
         path = list(all_results)[0]
-        response = f"I've found the requested file:\n {path}"
+        response = f"I've found the requested file:\n{path}"
+        lastFileSearchResults = []
     else:
         response = "I've found multiple files possibly matching your request:\n"
-        for idx, file in enumerate(all_results, start=1):
-            response += f"{idx}. {file}\n"
-        response += "Please specify which one you want."
+        lastFileSearchResults = list(all_results)
+        for idx, file in enumerate(lastFileSearchResults, start=1):
+            response += f"{idx}. {os.path.basename(file)}\n"
+        response += "Please specify which one you want by voice."
 
-    print(f"Assistant Response: {response}")
+    logging.info(f"Assistant Response: {response}")
     return response
 
 def getWeather(city, lang="it", units="metric", date='today'):
@@ -453,20 +503,28 @@ def extractPrompt(transcribedText, wakeWord):
 
 while True:
     prompt = input('USER: ')
-    call = functionCall(prompt)
-    visualContext = None
-    filePath = None
-    weatherData = None
+    if lastFileSearchResults:
+        chosen_file = handleFileChoice(prompt, lastFileSearchResults)
+        if chosen_file:
+            response = f"You selected the file:\n{chosen_file}"
+            lastFileSearchResults = []  # Reset dopo scelta
+        else:
+            response = "I'm sorry, I didn't understand your choice. Please repeat."
+    else:
+        call = functionCall(prompt)
+        visualContext = None
+        filePath = None
+        weatherData = None
 
-    if 'take screenshot' in call:
-        takeScreenshot()
-        visualContext = visionPrompt(prompt, 'screenshot.png')
-    elif 'search file' in call:
-        filePath = handleFileSearchPrompt(prompt)
-    elif 'get weather' in call:
-        weatherData = handleWeatherPrompt(prompt)
+        if 'take screenshot' in call:
+            takeScreenshot()
+            visualContext = visionPrompt(prompt, 'screenshot.png')
+        elif 'search file' in call:
+            filePath = handleFileSearchPrompt(prompt)
+        elif 'get weather' in call:
+            weatherData = handleWeatherPrompt(prompt)
 
-    response = groqPrompt(prompt, visualContext, filePath, weatherData)
+        response = groqPrompt(prompt, visualContext, filePath, weatherData)
 
     if enableTTS:
         speak(response)
