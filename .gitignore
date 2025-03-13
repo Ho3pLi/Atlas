@@ -171,3 +171,5 @@ cython_debug/
 .pypirc
 prompt.wav
 screenshot.png
+atlas.ppn
+models/porcupine_params_it.pv
