@@ -3,17 +3,25 @@ from dotenv import load_dotenv
 import os
 from groq import Groq
 import speech_recognition as sr
-import time
 from PIL import ImageGrab, Image
 from openai import OpenAI
 import google.generativeai as genai
 from datetime import datetime, timedelta
 import pyaudio
 from faster_whisper import WhisperModel
-import re
 import logging
 import difflib
 import requests
+import pvporcupine
+import struct
+import io
+import pydub
+from pydub.playback import play
+from pydub.utils import which
+from pydub import AudioSegment
+
+AudioSegment.converter = which("ffmpeg")
+AudioSegment.ffprobe = which("ffprobe")
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -32,8 +40,11 @@ groqApiKey = os.getenv('groqApiKey')
 googleApiKey = os.getenv('googleApiKey')
 openaiApiKey = os.getenv('openaiApiKey')
 openWeatherApiKey = os.getenv('openWeatherApiKey')
+porcupineApiKey = os.getenv('porcupineApiKey')
+narakeetApiKey = os.getenv('narakeetApiKey')
 
-wakeWord = 'atlas' #NOTE - toDefine se usare porcupine o snowboy
+wakeWordModel = 'models/atlas.ppn'
+porcupineModelPath = 'models/porcupine_params_it.pv'
 
 groqClient = Groq(api_key=groqApiKey)
 genai.configure(api_key=googleApiKey)
@@ -358,12 +369,21 @@ def extractWeatherInfo(prompt):
 
     date_str = data["date"].lower()
     today = datetime.today()
+    days = [
+        "lunedi", "lunedì", "lunedí", "lunedî", "lunedï",
+        "martedi", "martedì", "martedí", "martedî", "martedï",
+        "mercoledi", "mercoledì", "mercoledí", "mercoledî", "mercoledï",
+        "giovedi", "giovedì", "giovedí", "giovedî", "giovedï",
+        "venerdi", "venerdì", "venerdí", "venerdî", "venerdï",
+        "sabato",
+        "domenica"
+    ]
 
     if date_str == 'today':
         target_date = today
     elif date_str == 'tomorrow':
         target_date = today + timedelta(days=1)
-    elif date_str in ['lunedi','martedi','mercoledi','giovedi','venerdi','sabato','domenica']:
+    elif date_str in days:
         target_date = next_weekday(today, date_str)
     else:
         target_date = datetime.strptime(date_str, '%Y-%m-%d')
@@ -373,9 +393,15 @@ def extractWeatherInfo(prompt):
 
 def next_weekday(d, weekday_name):
     weekdays = {
-        'lunedi': 0, 'martedi': 1, 'mercoledi': 2,
-        'giovedi': 3, 'venerdi': 4, 'sabato': 5, 'domenica': 6
+        'lunedi': 0, 'lunedì': 0, 'lunedí': 0, 'lunedî': 0, 'lunedï': 0,
+        'martedi': 1, 'martedì': 1, 'martedí': 1, 'martedî': 1, 'martedï': 1,
+        'mercoledi': 2, 'mercoledì': 2, 'mercoledí': 2, 'mercoledî': 2, 'mercoledï': 2,
+        'giovedi': 3, 'giovedì': 3, 'giovedí': 3, 'giovedî': 3, 'giovedï': 3,
+        'venerdi': 4, 'venerdì': 4, 'venerdí': 4, 'venerdî': 4, 'venerdï': 4,
+        'sabato': 5,
+        'domenica': 6
     }
+
     weekday = weekdays[weekday_name.lower()]
     days_ahead = weekday - d.weekday()
     if days_ahead <= 0:
@@ -404,26 +430,50 @@ def visionPrompt(prompt, photoPath):
     response = model.generate_content([prompt, img])
     return response.text
 
-def speak(text):
-    logging.info("Generating audio with OpenAI TTS...")
-    playerStream = pyaudio.PyAudio().open(format=pyaudio.paInt16, channels=1, rate=24000, output=True)
-    streamStart = False
+# def speak(text):
+#     logging.info("Generating audio with OpenAI TTS...")
+#     playerStream = pyaudio.PyAudio().open(format=pyaudio.paInt16, channels=1, rate=24000, output=True)
+#     streamStart = False
 
-    with openai.audio.speech.with_streaming_response.create(
-        model='tts-1',
-        voice='fable',
-        response_format='pcm',
-        input=text
-    ) as response:
-        silenceThreshold = 0.01
-        for chunk in response.iter_bytes(chunk_size=1024):
-            if streamStart:
-                playerStream.write(chunk)
-            else:
-                if max(chunk) > silenceThreshold:
-                    playerStream.write(chunk)
-                    streamStart = True
-    logging.info("Audio successfully used.")
+#     with openai.audio.speech.with_streaming_response.create(
+#         model='tts-1',
+#         voice='fable',
+#         response_format='pcm',
+#         input=text
+#     ) as response:
+#         silenceThreshold = 0.01
+#         for chunk in response.iter_bytes(chunk_size=1024):
+#             if streamStart:
+#                 playerStream.write(chunk)
+#             else:
+#                 if max(chunk) > silenceThreshold:
+#                     playerStream.write(chunk)
+#                     streamStart = True
+#     logging.info("Audio successfully used.")
+
+def speak(text):
+    
+    if not narakeetApiKey:
+        raise ValueError("API key not found.")
+
+    url = f"https://api.narakeet.com/text-to-speech/m4a?voice=vincenzo"
+
+    headers = {
+        "Accept": "application/octet-stream",
+        "Content-Type": "text/plain",
+        "x-api-key": narakeetApiKey,
+    }
+
+    response = requests.post(url, headers=headers, data=text.encode("utf-8"))
+
+    if response.status_code == 200:
+        with open("debug_output.m4a", "wb") as f:
+            f.write(response.content)
+        sound = pydub.AudioSegment.from_file("debug_output.m4a", format="m4a")
+        play(sound)
+        logging.info("Audio successfully played.")
+    else:
+        logging.error(f"Error {response.status_code}: {response.text}")
 
 def waveToText(audioPath):
     logging.info(f"Transcribing audio: {audioPath}")
@@ -441,7 +491,7 @@ def callback(audio):
         f.write(audio.get_wav_data())
 
     promptText = waveToText(promptAudioPath)
-    cleanPrompt = extractPrompt(promptText, wakeWord)
+    cleanPrompt = extractPrompt(promptText)
 
     if not cleanPrompt:
         logging.warning("No prompt detected, try again.")
@@ -469,31 +519,51 @@ def callback(audio):
         speak(response)
 
 def startListening():
-    with mic as m:
-        r.adjust_for_ambient_noise(m, duration=2)
-        logging.info(f"Starting up the Assistnat. Say '{wakeWord}' followed by your prompt.")
+    porcupine = pvporcupine.create(
+        access_key=porcupineApiKey,
+        keyword_paths=[wakeWordModel],
+        model_path=porcupineModelPath
+    )
 
-    stopListening = r.listen_in_background(mic, callback)
+    pa = pyaudio.PyAudio()
+    audio_stream = pa.open(
+        rate=porcupine.sample_rate,
+        channels=1,
+        format=pyaudio.paInt16,
+        input=True,
+        frames_per_buffer=porcupine.frame_length
+    )
+
+    logging.info("Atlas is listening for the wake word...")
 
     try:
         while True:
-            time.sleep(.5)
+            pcm = audio_stream.read(porcupine.frame_length, exception_on_overflow=False)
+            pcm_unpacked = struct.unpack_from("h" * porcupine.frame_length, pcm)
+            keyword_index = porcupine.process(pcm_unpacked)
+
+            if keyword_index >= 0:
+                logging.info("Wake word detected! Listening for prompt...")
+                with mic as m:
+                    r.adjust_for_ambient_noise(m, duration=0.5)
+                    logging.info("Capturing prompt...")
+                    audio = r.listen(m)
+                    callback(audio)
+
     except KeyboardInterrupt:
-        stopListening(False)
-        logging.info("Assistant killed :(")
+        logging.info("Interrupted by user.")
 
-def extractPrompt(transcribedText, wakeWord):
-    logging.info(f"Extracting prompt from phrase: {transcribedText}")
+    finally:
+        if porcupine is not None:
+            porcupine.delete()
 
-    pattern = rf'\b{re.escape(wakeWord)}[\s,.?!]*([A-Za-z0-9].*)'
-    match = re.search(pattern, transcribedText, re.IGNORECASE)
+        audio_stream.stop_stream()
+        audio_stream.close()
+        pa.terminate()
 
-    if match:
-        logging.info(f"Prompt extracted: {match.group(1).strip()}")
-        return match.group(1).strip()
-    else:
-        logging.warning("No prompt found in the phrase.")
-        return None
+def extractPrompt(transcribedText):
+    logging.info(f"Extracted prompt: {transcribedText}")
+    return transcribedText.strip() if transcribedText else None
 
 # print(handleFileSearchPrompt("Atlas, trova il file tesi"))
 
@@ -501,30 +571,33 @@ def extractPrompt(transcribedText, wakeWord):
 
 # waveToText('prompt.wav')
 
-while True:
-    prompt = input('USER: ')
-    if lastFileSearchResults:
-        chosen_file = handleFileChoice(prompt, lastFileSearchResults)
-        if chosen_file:
-            response = f"You selected the file:\n{chosen_file}"
-            lastFileSearchResults = []  # Reset dopo scelta
-        else:
-            response = "I'm sorry, I didn't understand your choice. Please repeat."
-    else:
-        call = functionCall(prompt)
-        visualContext = None
-        filePath = None
-        weatherData = None
+# while True:
+#     prompt = input('USER: ')
+#     if lastFileSearchResults:
+#         chosen_file = handleFileChoice(prompt, lastFileSearchResults)
+#         if chosen_file:
+#             response = f"You selected the file:\n{chosen_file}"
+#             lastFileSearchResults = []
+#         else:
+#             response = "I'm sorry, I didn't understand your choice. Please repeat."
+#     else:
+#         call = functionCall(prompt)
+#         visualContext = None
+#         filePath = None
+#         weatherData = None
 
-        if 'take screenshot' in call:
-            takeScreenshot()
-            visualContext = visionPrompt(prompt, 'screenshot.png')
-        elif 'search file' in call:
-            filePath = handleFileSearchPrompt(prompt)
-        elif 'get weather' in call:
-            weatherData = handleWeatherPrompt(prompt)
+#         if 'take screenshot' in call:
+#             takeScreenshot()
+#             visualContext = visionPrompt(prompt, 'screenshot.png')
+#         elif 'search file' in call:
+#             filePath = handleFileSearchPrompt(prompt)
+#         elif 'get weather' in call:
+#             weatherData = handleWeatherPrompt(prompt)
 
-        response = groqPrompt(prompt, visualContext, filePath, weatherData)
+#         response = groqPrompt(prompt, visualContext, filePath, weatherData)
 
-    if enableTTS:
-        speak(response)
+#     if enableTTS:
+#         speak(response)
+
+if __name__ == "__main__":
+    startListening()
