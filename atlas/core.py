@@ -1,7 +1,8 @@
 import logging
-from atlas.config import groqApiKey
-from atlas.main import convo
 from groq import Groq
+
+from atlas.config import groqApiKey
+from atlas.config import convo
 
 groqClient = Groq(api_key=groqApiKey)
 
