@@ -15,8 +15,8 @@ weatherApiKey = os.getenv('openWeatherApiKey')
 porcupineApiKey = os.getenv('porcupineApiKey')
 narakeetApiKey = os.getenv('narakeetApiKey')
 
-wakeWordModel = 'models/atlas.ppn'
-porcupineModelPath = 'models/porcupine_params_it.pv'
+wakeWordModel = 'atlas/models/atlas.ppn'
+porcupineModelPath = 'atlas/models/porcupine_params_it.pv'
 
 groqClient = Groq(api_key=groqApiKey)
 genai.configure(api_key=googleApiKey)
