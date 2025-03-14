@@ -1,8 +1,8 @@
 import logging
 import requests
-import io
 import pydub
 from pydub.playback import play
+
 from atlas.config import narakeetApiKey
 
 def speak(text):    
