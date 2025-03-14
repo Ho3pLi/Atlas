@@ -133,3 +133,48 @@ def semanticSearch(keywords, allowedDirs=allowedDirs):
 
     logging.info(f'semanticSearch: {matches}')
     return matches
+
+def handleFileChoice(user_choice, file_list):
+    
+    prompt_llm = (
+        "You are a model that extracts exactly ONE filename from a user's choice.\n"
+        "You receive a numbered list of filenames and the user's spoken choice.\n"
+        "List:\n\n"
+        f"{[os.path.basename(f) for f in file_list]}\n\n"
+        f"User choice: '{user_choice}'\n\n"
+        "You MUST return ONLY the exact filename from the provided list matching the user's choice.\n"
+        "Do NOT add any explanations, punctuation, or extra words.\n"
+        "Examples:\n"
+        "List:\n"
+        "1. thesis.pdf\n"
+        "2. notes.docx\n"
+        "3. lecture.txt\n"
+        "\nUser choice: 'I want thesis pdf'\n"
+        "Your response: thesis.pdf\n"
+        "\nUser choice: 'the notes'\n"
+        "Your response: notes.docx\n"
+        "\nUser choice: 'lecture file'\n"
+        "Your response: lecture.txt\n"
+        "\nRespond ONLY with the exact filename, nothing else."
+    )
+
+
+    response = groqClient.chat.completions.create(
+        messages=[
+            {'role':'system', 'content': prompt_llm}
+        ],
+        model='llama-3.1-8b-instant'
+    )
+
+    chosen_filename = response.choices[0].message.content.strip()
+
+    logging.info(f"LLM extracted file choice: {chosen_filename}")
+
+    if chosen_filename == 'NONE':
+        return None
+
+    for path in file_list:
+        if os.path.basename(path) == chosen_filename:
+            return path
+        
+    return None
