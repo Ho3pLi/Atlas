@@ -1,5 +1,4 @@
 import logging
-from groq import Groq
 
 from atlas.config import groqClient, convo
 
