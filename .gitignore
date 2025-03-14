@@ -172,5 +172,5 @@ cython_debug/
 prompt.wav
 screenshot.png
 atlas.ppn
-models/porcupine_params_it.pv
 debug_output.m4a
+atlas/models/porcupine_params_it.pv

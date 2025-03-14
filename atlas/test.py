@@ -1,4 +1,4 @@
-import atlas
+import atlas.atlas as atlas
 
 atlas.enableTTS = True
 
