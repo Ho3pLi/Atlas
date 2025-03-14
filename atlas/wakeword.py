@@ -4,7 +4,7 @@ import pyaudio
 import struct
 
 from atlas.config import porcupineApiKey, wakeWordModel, porcupineModelPath, r, mic
-from atlas.main import callback
+from main import callback
 
 def startListening():
     porcupine = pvporcupine.create(
