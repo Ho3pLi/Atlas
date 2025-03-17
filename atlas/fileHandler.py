@@ -23,7 +23,9 @@ def handleFileSearchPrompt(prompt):
     if len(all_results) < 5:
         semantic_keywords = extractSemanticKeywords(prompt)
         semantic_results = semanticSearch(semantic_keywords, allowedDirs)
-        all_results.update(semantic_results)
+        all_results.update(semantic_results[:5])
+
+    all_results = list(all_results)[:5]
 
     if not all_results:
         response = "I'm sorry, I couldn't find any files matching your request."
