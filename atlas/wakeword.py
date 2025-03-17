@@ -7,6 +7,7 @@ from atlas.config import porcupineApiKey, wakeWordModel, porcupineModelPath, r, 
 from main import callback
 
 def startListening():
+    logging.info('Initializing startListening() function...')
     porcupine = pvporcupine.create(
         access_key=porcupineApiKey,
         keyword_paths=[wakeWordModel],
