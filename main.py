@@ -51,7 +51,7 @@ def processUserPrompt(cleanPrompt):
 
         if 'take screenshot' in call:
             atlas.takeScreenshot()
-            visualContext = atlas.visionPrompt(cleanPrompt, 'screenshot.png')
+            visualContext = atlas.visionPrompt(cleanPrompt, atlas.screenshotPath)
         elif 'search file' in call:
             filePath = atlas.handleFileSearchPrompt(cleanPrompt)
         elif 'get weather' in call:
