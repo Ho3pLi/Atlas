@@ -1,6 +1,15 @@
 import logging
 import atlas
 
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+    handlers=[
+        logging.FileHandler("atlas.log"),
+        logging.StreamHandler()
+    ]
+)
+
 def callback(audio):
     logging.info("Audio received, thinking...")
     
