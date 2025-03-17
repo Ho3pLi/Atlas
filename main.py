@@ -10,22 +10,32 @@ logging.basicConfig(
     ]
 )
 
-def callback(audio):
-    logging.info("Audio received, thinking...")
-    
-    promptAudioPath = 'prompt.wav'
-    with open(promptAudioPath, 'wb') as f:
-        f.write(audio.get_wav_data())
+debugMode = True
 
-    promptText = atlas.waveToText(promptAudioPath)
-    cleanPrompt = atlas.extractPrompt(promptText)
+def callback(audio=None, debugMode=debugMode):
+    if not debugMode:
+        logging.info("Audio received, thinking...")
 
-    if not cleanPrompt:
-        logging.warning("No prompt detected, try again.")
-        return
+        promptAudioPath = 'prompt.wav'
+        with open(promptAudioPath, 'wb') as f:
+            f.write(audio.get_wav_data())
 
-    logging.info(f"Prompt detected: {cleanPrompt}")
+        promptText = atlas.waveToText(promptAudioPath)
+        cleanPrompt = atlas.extractPrompt(promptText)
 
+        if not cleanPrompt:
+            logging.warning("No prompt detected, try again.")
+            return
+
+        logging.info(f"Prompt detected: {cleanPrompt}")
+        processUserPrompt(cleanPrompt)
+    else:
+        while(True):
+            cleanPrompt = input('USER: ')
+            processUserPrompt(cleanPrompt)
+            
+
+def processUserPrompt(cleanPrompt):
     if atlas.lastFileSearchResults:
         chosen_file = atlas.handleFileChoice(cleanPrompt, atlas.lastFileSearchResults)
         if chosen_file:
@@ -38,7 +48,7 @@ def callback(audio):
         visualContext = None
         filePath = None
         weatherData = None
-    
+
         if 'take screenshot' in call:
             atlas.takeScreenshot()
             visualContext = atlas.visionPrompt(cleanPrompt, 'screenshot.png')
@@ -46,12 +56,13 @@ def callback(audio):
             filePath = atlas.handleFileSearchPrompt(cleanPrompt)
         elif 'get weather' in call:
             weatherData = atlas.handleWeatherPrompt(cleanPrompt)
-    
         response = atlas.groqPrompt(cleanPrompt, visualContext, filePath, weatherData)
-        logging.info(f"Assistant response: {response}")
 
     if atlas.enableTTS:
         atlas.speak(response)
 
 if __name__ == "__main__":
-    atlas.startListening()
+    if not debugMode:
+        atlas.startListening()
+    else:
+        callback()
