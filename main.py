@@ -45,5 +45,4 @@ def callback(audio):
         atlas.speak(response)
 
 if __name__ == "__main__":
-    logging.info("Atlas è pronto! In attesa della wake word...")
     atlas.startListening()
