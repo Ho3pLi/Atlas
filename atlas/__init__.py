@@ -5,4 +5,4 @@ from .fileHandler import handleFileSearchPrompt, handleFileChoice
 from .weather import handleWeatherPrompt
 from .wakeword import startListening
 from .audioProcessing import waveToText, extractPrompt
-from .config import enableTTS, lastFileSearchResults
+from .config import enableTTS, lastFileSearchResults, screenshotPath
