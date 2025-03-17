@@ -1,14 +1,13 @@
 import logging
 from PIL import ImageGrab, Image
 
-from atlas.config import model
+from atlas.config import model, screenshotPath
 
 def takeScreenshot():
-    path = f'screenshot.png'
-    logging.info(f"Taking a screenshot in {path}...")
+    logging.info(f"Taking a screenshot in {screenshotPath}...")
     screenshot = ImageGrab.grab()
     rgbScreenshot = screenshot.convert('RGB')
-    rgbScreenshot.save(path, quality=15)
+    rgbScreenshot.save(screenshotPath, quality=15)
     logging.info("Screenshot successfully saved.")
 
 def visionPrompt(prompt, photoPath):
