@@ -38,26 +38,36 @@ def callback(audio=None, debugMode=debugMode):
 
 def processUserPrompt(cleanPrompt):
     if atlas.lastFileSearchResults:
-        chosen_file = atlas.handleFileChoice(cleanPrompt, atlas.lastFileSearchResults)
-        if chosen_file:
-            response = f"You selected the file:\n{chosen_file}"
-            atlas.lastFileSearchResults = []
-        else:
-            response = "I'm sorry, I didn't understand your choice. Please repeat."
-    else:
-        call = atlas.functionCall(cleanPrompt)
-        visualContext = None
-        filePath = None
-        weatherData = None
+        chosenFile = atlas.handleFileChoice(cleanPrompt, atlas.lastFileSearchResults)
+        
+        if chosenFile:
+            atlas.lastFileSearchResults.clear()
+            atlas.currentFilePath = chosenFile
 
-        if 'take screenshot' in call:
-            atlas.takeScreenshot()
-            visualContext = atlas.visionPrompt(cleanPrompt, atlas.screenshotPath)
-        elif 'search file' in call:
-            filePath = atlas.handleFileSearchPrompt(cleanPrompt)
-        elif 'get weather' in call:
-            weatherData = atlas.handleWeatherPrompt(cleanPrompt)
-        response = atlas.groqPrompt(cleanPrompt, visualContext, filePath, weatherData)
+            fileContent = atlas.openFile(chosenFile)
+            fileContent = fileContent[:2000] if fileContent else "No readable content."
+
+            summaryPrompt = f"Summarize the following file content in 2-3 sentences: {fileContent}"
+            summary = atlas.groqPrompt(summaryPrompt, None, None, None)
+
+            if atlas.enableTTS:
+                atlas.speak(summary)
+        return  
+
+    call = atlas.functionCall(cleanPrompt)
+    visualContext = None
+    filePath = None
+    weatherData = None
+
+    if 'take screenshot' in call:
+        atlas.takeScreenshot()
+        visualContext = atlas.visionPrompt(cleanPrompt, atlas.screenshotPath)
+    elif 'search file' in call:
+        filePath = atlas.handleFileSearchPrompt(cleanPrompt)
+    elif 'get weather' in call:
+        weatherData = atlas.handleWeatherPrompt(cleanPrompt)
+
+    response = atlas.groqPrompt(cleanPrompt, visualContext, filePath, weatherData)
 
     if atlas.enableTTS:
         atlas.speak(response)
