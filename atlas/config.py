@@ -18,10 +18,15 @@ narakeetApiKey = os.getenv('narakeetApiKey')
 wakeWordModel = 'atlas/models/atlas.ppn'
 porcupineModelPath = 'atlas/models/porcupine_params_it.pv'
 screenshotPath = 'temp/screenshot.png'
+promptPath = 'temp/prompt.wav'
+logPath = 'log/atlas.log'
 
 groqClient = Groq(api_key=groqApiKey)
 genai.configure(api_key=googleApiKey)
 openai = OpenAI(api_key=openaiApiKey)
+
+groqModel = 'llama-3.1-8b-instant'
+groqModel2 = 'llama-3.3-70b-versatile'
 
 enableTTS = False
 allowedDirs = [os.path.expanduser('~/Documents/AtlasDir')]

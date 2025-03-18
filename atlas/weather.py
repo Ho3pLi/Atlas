@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timedelta
 import requests
 
-from atlas.config import groqClient, weatherApiKey
+from atlas.config import groqClient, weatherApiKey, groqModel
 
 def handleWeatherPrompt(prompt):
     logging.info('Entering handleWeatherPrompt() function...')
@@ -30,7 +30,7 @@ def extractWeatherInfo(prompt):
 
     chatCompletion = groqClient.chat.completions.create(
         messages=[{'role':'system', 'content':sysMsg}, {'role':'user', 'content':prompt}],
-        model='llama-3.1-8b-instant'
+        model= groqModel
     )
 
     response = chatCompletion.choices[0].message.content

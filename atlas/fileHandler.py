@@ -3,7 +3,7 @@ import os
 import json
 import difflib
 
-from atlas.config import allowedDirs, groqClient, lastFileSearchResults
+from atlas.config import allowedDirs, groqClient, lastFileSearchResults, groqModel
 
 def handleFileSearchPrompt(prompt):
     logging.info('Entering handleSearchPrompt() function...')
@@ -64,7 +64,7 @@ def extractFileInfo(prompt):
 
     chatCompletion = groqClient.chat.completions.create(
         messages=[{'role':'system', 'content':sysMsg}, {'role':'user', 'content':prompt}],
-        model='llama-3.1-8b-instant'  
+        model= groqModel  
     )
     response = chatCompletion.choices[0].message.content
     logging.info(f'Response in extractFileInfo(): {response}')
@@ -120,7 +120,7 @@ def extractSemanticKeywords(prompt):
 
     chatCompletion = groqClient.chat.completions.create(
         messages=[{'role':'system', 'content':sysMsg}, {'role':'user', 'content':prompt}],
-        model='llama-3.1-8b-instant'
+        model= groqModel
     )
 
     response = chatCompletion.choices[0].message.content
@@ -170,7 +170,7 @@ def handleFileChoice(user_choice, file_list):
         messages=[
             {'role':'system', 'content': prompt_llm}
         ],
-        model='llama-3.1-8b-instant'
+        model= groqModel
     )
 
     chosen_filename = response.choices[0].message.content.strip()

@@ -5,7 +5,7 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO,
     handlers=[
-        logging.FileHandler("atlas.log"),
+        logging.FileHandler(atlas.logPath),
         logging.StreamHandler()
     ]
 )
@@ -16,7 +16,7 @@ def callback(audio=None, debugMode=debugMode):
     if not debugMode:
         logging.info("Audio received, thinking...")
 
-        promptAudioPath = 'prompt.wav'
+        promptAudioPath = atlas.promptPath
         with open(promptAudioPath, 'wb') as f:
             f.write(audio.get_wav_data())
 

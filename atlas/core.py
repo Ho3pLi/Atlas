@@ -1,6 +1,6 @@
 import logging
 
-from atlas.config import groqClient, convo
+from atlas.config import groqClient, convo, groqModel, groqModel2
 
 def groqPrompt(prompt, imgContext=None, filePath=None, weatherData=None):
     if imgContext:
@@ -10,7 +10,7 @@ def groqPrompt(prompt, imgContext=None, filePath=None, weatherData=None):
     elif weatherData:
         prompt = f'\n\nUSER PROMPT: {prompt}\n\nWEATHER CONTEXT: {weatherData}\n'
 
-    model = 'llama-3.1-8b-instant' if len(prompt) < 50 else 'llama-3.3-70b-versatile'
+    model =  groqModel if len(prompt) < 50 else groqModel2
     logging.info(f"[Groq] Sending request - Model: {model} | Prompt: {prompt}")
 
     convo.append({'role':'user', 'content':prompt})
@@ -31,7 +31,7 @@ def functionCall(prompt):
     )
 
     functionConvo = [{'role':'system', 'content':sysMsg}, {'role':'user', 'content':prompt}]
-    chatCompletion = groqClient.chat.completions.create(messages=functionConvo, model='llama-3.3-70b-versatile')
+    chatCompletion = groqClient.chat.completions.create(messages=functionConvo, model=groqModel2)
     response = chatCompletion.choices[0].message
 
     logging.info(f"Chosen function: {response.content}")
