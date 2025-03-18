@@ -17,11 +17,11 @@ def handleFileSearchPrompt(prompt):
     exact_results = exactSearch(filename, extension, allowedDirs)
     all_results.update(exact_results)
 
-    if len(all_results) < 5:
+    if len(all_results) == 0:
         fuzzy_results = fuzzySearch(filename, allowedDirs)
         all_results.update(fuzzy_results)
 
-    if len(all_results) < 5:
+    if len(all_results) < 5 and len(all_results) >= 2:
         semantic_keywords = extractSemanticKeywords(prompt)
         semantic_results = semanticSearch(semantic_keywords, allowedDirs)
         all_results.update(semantic_results[:5])
@@ -31,14 +31,16 @@ def handleFileSearchPrompt(prompt):
 
     if not all_results:
         response = "I'm sorry, I couldn't find any files matching your request."
-        lastFileSearchResults = []
+        lastFileSearchResults.clear()
     elif len(all_results) == 1:
         path = list(all_results)[0]
         response = f"I've found the requested file:\n{path}"
-        lastFileSearchResults = []
+        lastFileSearchResults.clear()
     else:
         response = "I've found multiple files possibly matching your request:\n"
-        lastFileSearchResults = list(all_results)
+        lastFileSearchResults.clear()
+        lastFileSearchResults.extend(all_results)
+        
         for idx, file in enumerate(lastFileSearchResults, start=1):
             response += f"{idx}. {os.path.basename(file)}\n"
         response += "Please specify which one you want by voice."
@@ -47,7 +49,7 @@ def handleFileSearchPrompt(prompt):
     return response
 
 def extractFileInfo(prompt):
-    logging.info('Entering extractFileIndo() function...')
+    logging.info('Entering extractFileInfo() function...')
     sysMsg = (
         'You are a model that precisely extracts information from user requests. '
         'You will receive a sentence in which the user asks to search for a file on the PC. '
