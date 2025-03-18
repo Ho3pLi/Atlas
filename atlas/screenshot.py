@@ -4,6 +4,7 @@ from PIL import ImageGrab, Image
 from atlas.config import model, screenshotPath
 
 def takeScreenshot():
+    logging.info('Entering takeScreenshot() function...')
     logging.info(f"Taking a screenshot in {screenshotPath}...")
     screenshot = ImageGrab.grab()
     rgbScreenshot = screenshot.convert('RGB')
@@ -11,6 +12,7 @@ def takeScreenshot():
     logging.info("Screenshot successfully saved.")
 
 def visionPrompt(prompt, photoPath):
+    logging.info('Entering visionPrompt() function...')
     img = Image.open(photoPath)
     prompt = (
         'You are the vision analysis AI that provides semtantic meaning from images to provide context '
@@ -20,4 +22,5 @@ def visionPrompt(prompt, photoPath):
         f'assistant who will respond to the user. \nUSER PROMPT: {prompt}'
     )
     response = model.generate_content([prompt, img])
+    logging.info(f'Response in visionPrompt(): {response.text}')
     return response.text

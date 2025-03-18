@@ -65,4 +65,5 @@ if __name__ == "__main__":
     if not debugMode:
         atlas.startListening()
     else:
+        logging.info('Initializing Atlas in debug mode...')
         callback()

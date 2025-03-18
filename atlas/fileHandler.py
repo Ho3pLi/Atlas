@@ -6,6 +6,7 @@ import difflib
 from atlas.config import allowedDirs, groqClient, lastFileSearchResults
 
 def handleFileSearchPrompt(prompt):
+    logging.info('Entering handleSearchPrompt() function...')
     global lastFileSearchResults
 
     info = extractFileInfo(prompt)
@@ -26,6 +27,7 @@ def handleFileSearchPrompt(prompt):
         all_results.update(semantic_results[:5])
 
     all_results = list(all_results)[:5]
+    logging.info(f'all_results in handleFileSearchPrompt: {all_results}')
 
     if not all_results:
         response = "I'm sorry, I couldn't find any files matching your request."
@@ -45,7 +47,7 @@ def handleFileSearchPrompt(prompt):
     return response
 
 def extractFileInfo(prompt):
-
+    logging.info('Entering extractFileIndo() function...')
     sysMsg = (
         'You are a model that precisely extracts information from user requests. '
         'You will receive a sentence in which the user asks to search for a file on the PC. '
@@ -65,9 +67,11 @@ def extractFileInfo(prompt):
         model='llama-3.1-8b-instant'  
     )
     response = chatCompletion.choices[0].message.content
+    logging.info(f'Response in extractFileInfo(): {response}')
     return json.loads(response)
 
 def exactSearch(filename, extension, allowedDirs=allowedDirs):
+    logging.info('Entering exactSearch() function...')
     results = []
     for base_dir in allowedDirs:
         expanded_dir = os.path.expanduser(base_dir)
@@ -87,6 +91,7 @@ def exactSearch(filename, extension, allowedDirs=allowedDirs):
     return results
 
 def fuzzySearch(filename, allowedDirs=allowedDirs, cutoff=0.8):
+    logging.info('Entering fuzzySearch() function...')
     results = []
     for base_dir in allowedDirs:
         expanded_dir = os.path.expanduser(base_dir)
@@ -106,7 +111,7 @@ def fuzzySearch(filename, allowedDirs=allowedDirs, cutoff=0.8):
     return results
 
 def extractSemanticKeywords(prompt):
-
+    logging.info('Entering extractSemanticKeywords() function...')
     sysMsg = (
         "You are a semantic keyword extractor. "
         "Given a user prompt, generate a short list (5-10) of related keywords that might match filenames "
@@ -119,6 +124,7 @@ def extractSemanticKeywords(prompt):
     )
 
     response = chatCompletion.choices[0].message.content
+    logging.info(f'Response in extractSemanticKeywords(): {response}')
     return json.loads(response)
 
 def semanticSearch(keywords, allowedDirs=allowedDirs):
@@ -137,7 +143,7 @@ def semanticSearch(keywords, allowedDirs=allowedDirs):
     return matches
 
 def handleFileChoice(user_choice, file_list):
-    
+    logging.info('Entering handleFileChoice() function...')
     prompt_llm = (
         "You are a model that extracts exactly ONE filename from a user's choice.\n"
         "You receive a numbered list of filenames and the user's spoken choice.\n"
@@ -160,7 +166,6 @@ def handleFileChoice(user_choice, file_list):
         "\nRespond ONLY with the exact filename, nothing else."
     )
 
-
     response = groqClient.chat.completions.create(
         messages=[
             {'role':'system', 'content': prompt_llm}
@@ -170,7 +175,7 @@ def handleFileChoice(user_choice, file_list):
 
     chosen_filename = response.choices[0].message.content.strip()
 
-    logging.info(f"LLM extracted file choice: {chosen_filename}")
+    logging.info(f"Extracted file choice: {chosen_filename}")
 
     if chosen_filename == 'NONE':
         return None

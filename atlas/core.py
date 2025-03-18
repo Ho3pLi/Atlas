@@ -22,6 +22,7 @@ def groqPrompt(prompt, imgContext=None, filePath=None, weatherData=None):
     return response.content
 
 def functionCall(prompt):
+    logging.info('Entering functionCall() function...')
     sysMsg = (
         'You are an AI function calling model. You will determine whether search for weather, '
         'taking a screenshot, search for a file or calling no functions is best for a voice assistant to respond '

@@ -6,6 +6,7 @@ import requests
 from atlas.config import groqClient, weatherApiKey
 
 def handleWeatherPrompt(prompt):
+    logging.info('Entering handleWeatherPrompt() function...')
     info = extractWeatherInfo(prompt)
     city = info['city']
     date = info['date']
@@ -16,6 +17,7 @@ def handleWeatherPrompt(prompt):
     return weatherReport
 
 def extractWeatherInfo(prompt):
+    logging.info('Entering extractWeatherInfo() function...')
     sysMsg = (
         "You extract ONLY the city name and the date from the user's request.\n"
         "Examples:\n"
@@ -32,6 +34,7 @@ def extractWeatherInfo(prompt):
     )
 
     response = chatCompletion.choices[0].message.content
+    logging.info(f'Response in extractWeatherInfo: {response}')
     data = json.loads(response)
 
     date_str = data["date"].lower()
@@ -56,9 +59,11 @@ def extractWeatherInfo(prompt):
         target_date = datetime.strptime(date_str, '%Y-%m-%d')
 
     data['date'] = target_date.strftime('%Y-%m-%d')
+    logging.info(f'Data in extractWeatherInfo: {data}')
     return data
 
 def next_weekday(d, weekday_name):
+    logging.info('Entering next_weekday() function...')
     weekdays = {
         'lunedi': 0, 'lunedì': 0, 'lunedí': 0, 'lunedî': 0, 'lunedï': 0,
         'martedi': 1, 'martedì': 1, 'martedí': 1, 'martedî': 1, 'martedï': 1,
@@ -73,9 +78,11 @@ def next_weekday(d, weekday_name):
     days_ahead = weekday - d.weekday()
     if days_ahead <= 0:
         days_ahead += 7
+    logging.info(f'd in next_weekday: {d+timedelta(days=days_ahead)}')
     return d + timedelta(days=days_ahead)
 
 def getWeather(city, lang="it", units="metric", date='today'):
+    logging.info('Entering getWeather() function...')
     baseUrl = "http://api.openweathermap.org/data/2.5/"
 
     if date == 'today':
