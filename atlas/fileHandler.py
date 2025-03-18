@@ -2,6 +2,9 @@ import logging
 import os
 import json
 import difflib
+import mimetypes
+import pdfplumber
+from docx import Document
 
 from atlas.config import allowedDirs, groqClient, lastFileSearchResults, groqModel
 
@@ -144,13 +147,13 @@ def semanticSearch(keywords, allowedDirs=allowedDirs):
     logging.info(f'semanticSearch: {matches}')
     return matches
 
-def handleFileChoice(user_choice, file_list):
+def handleFileChoice(user_choice, fileList):
     logging.info('Entering handleFileChoice() function...')
-    prompt_llm = (
+    promptLLM = (
         "You are a model that extracts exactly ONE filename from a user's choice.\n"
         "You receive a numbered list of filenames and the user's spoken choice.\n"
         "List:\n\n"
-        f"{[os.path.basename(f) for f in file_list]}\n\n"
+        f"{[os.path.basename(f) for f in fileList]}\n\n"
         f"User choice: '{user_choice}'\n\n"
         "You MUST return ONLY the exact filename from the provided list matching the user's choice.\n"
         "Do NOT add any explanations, punctuation, or extra words.\n"
@@ -170,20 +173,66 @@ def handleFileChoice(user_choice, file_list):
 
     response = groqClient.chat.completions.create(
         messages=[
-            {'role':'system', 'content': prompt_llm}
+            {'role':'system', 'content': promptLLM}
         ],
         model= groqModel
     )
 
-    chosen_filename = response.choices[0].message.content.strip()
+    chosenFilename = response.choices[0].message.content.strip()
 
-    logging.info(f"Extracted file choice: {chosen_filename}")
+    logging.info(f"Extracted file choice: {chosenFilename}")
+    logging.info(f'File list: {fileList}')
 
-    if chosen_filename == 'NONE':
+    if chosenFilename == 'NONE':
         return None
 
-    for path in file_list:
-        if os.path.basename(path) == chosen_filename:
+    for path in fileList:
+        if os.path.basename(path) == chosenFilename:
             return path
         
     return None
+
+def openFile(filePath):
+    logging.info('Entering openFile() function...')
+    
+    if not os.path.exists(filePath):
+        logging.error(f"File not found: {filePath}")
+        return "Error: File not found."
+
+    mimeType, _ = mimetypes.guess_type(filePath)
+    logging.info(f'Mime type: {mimeType}')
+
+    if mimeType and mimeType.startswith("text"):
+        try:
+            with open(filePath, "r", encoding="utf-8") as f:
+                content = f.read()
+            return content[:2000]
+        except Exception as e:
+            logging.error(f"Error reading file: {e}")
+            return "Error: Unable to read the file."
+
+    elif filePath.endswith(".pdf") and pdfplumber:
+        try:
+            with pdfplumber.open(filePath) as pdf:
+                text = "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
+            return text[:2000] if text else "No readable text found in the PDF."
+        except Exception as e:
+            logging.error(f"Error reading PDF: {e}")
+            return "Error: Unable to read the PDF."
+
+    elif filePath.endswith(".docx") and Document:
+        try:
+            doc = Document(filePath)
+            text = "\n".join([p.text for p in doc.paragraphs])
+            return text[:1000] if text else "No readable text found in the document."
+        except Exception as e:
+            logging.error(f"Error reading DOCX: {e}")
+            return "Error: Unable to read the document."
+
+    else:
+        try:
+            os.startfile(filePath)
+            return "Opening file..."
+        except Exception as e:
+            logging.error(f"Error opening file: {e}")
+            return "Error: Unable to open the file."
