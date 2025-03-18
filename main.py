@@ -1,11 +1,12 @@
 import logging
+from atlas.config import logPath
 import atlas
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO,
     handlers=[
-        logging.FileHandler(atlas.logPath),
+        logging.FileHandler(logPath),
         logging.StreamHandler()
     ]
 )
