@@ -19,7 +19,7 @@ wakeWordModel = 'atlas/models/atlas.ppn'
 porcupineModelPath = 'atlas/models/porcupine_params_it.pv'
 screenshotPath = 'temp/screenshot.png'
 promptPath = 'temp/prompt.wav'
-logPath = 'log/atlas.log'
+logPath = 'logs/atlas.log'
 
 groqClient = Groq(api_key=groqApiKey)
 genai.configure(api_key=googleApiKey)
