@@ -11,9 +11,7 @@ logging.basicConfig(
     ]
 )
 
-debugMode = True
-
-def callback(audio=None, debugMode=debugMode):
+def callback(audio=None, debugMode=atlas.debugMode):
     if not debugMode:
         logging.info("Audio received, thinking...")
 
@@ -73,7 +71,7 @@ def processUserPrompt(cleanPrompt):
         atlas.speak(response)
 
 if __name__ == "__main__":
-    if not debugMode:
+    if not atlas.debugMode:
         atlas.startListening()
     else:
         logging.info('Initializing Atlas in debug mode...')

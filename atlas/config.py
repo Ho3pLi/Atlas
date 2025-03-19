@@ -71,3 +71,5 @@ whisperModel = WhisperModel(
 
 r = sr.Recognizer()
 mic = sr.Microphone()
+
+debugMode = True
