@@ -25,9 +25,9 @@ def functionCall(prompt):
     logging.info('Entering functionCall() function...')
     sysMsg = (
         'You are an AI function calling model. You will determine whether search for weather, '
-        'taking a screenshot, search for a file or calling no functions is best for a voice assistant to respond '
+        'taking a screenshot, search for a file, build a meal plan or calling no functions is best for a voice assistant to respond '
         'to the users prompt. The webcam can be assumed to be a normal laptop webcam facing the user. You will '
-        'respond with only one selection from this list: ["get weather", "take screenshot", "search file", "None"]'
+        'respond with only one selection from this list: ["get weather", "take screenshot", "search file", "build meal plan", "None"]'
     )
 
     functionConvo = [{'role':'system', 'content':sysMsg}, {'role':'user', 'content':prompt}]

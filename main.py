@@ -1,5 +1,5 @@
 import logging
-from atlas.config import logPath
+from atlas.config import logPath, debugMode
 import atlas
 
 logging.basicConfig(
@@ -11,7 +11,7 @@ logging.basicConfig(
     ]
 )
 
-def callback(audio=None, debugMode=atlas.debugMode):
+def callback(audio=None, debugMode=debugMode):
     if not debugMode:
         logging.info("Audio received, thinking...")
 
@@ -64,6 +64,8 @@ def processUserPrompt(cleanPrompt):
         filePath = atlas.handleFileSearchPrompt(cleanPrompt)
     elif 'get weather' in call:
         weatherData = atlas.handleWeatherPrompt(cleanPrompt)
+    elif 'build meal plan' in call:
+        atlas.buildMealPlan()
 
     response = atlas.groqPrompt(cleanPrompt, visualContext, filePath, weatherData)
 
@@ -71,7 +73,7 @@ def processUserPrompt(cleanPrompt):
         atlas.speak(response)
 
 if __name__ == "__main__":
-    if not atlas.debugMode:
+    if not debugMode:
         atlas.startListening()
     else:
         logging.info('Initializing Atlas in debug mode...')
