@@ -66,6 +66,8 @@ def processUserPrompt(cleanPrompt):
         weatherData = atlas.handleWeatherPrompt(cleanPrompt)
     elif 'build meal plan' in call:
         atlas.buildMealPlan()
+        return
+        # print('ao')
 
     response = atlas.groqPrompt(cleanPrompt, visualContext, filePath, weatherData)
 

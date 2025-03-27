@@ -1,11 +1,18 @@
 import logging
-from atlas.config import debugMode
+from atlas.config import debugMode, groqClient, groqModel, mealPreferences
 from atlas.tts import speak
 from atlas.audioProcessing import waveToText
 
+mealPlan = {}
+
 def buildMealPlan():
     logging.info('Entering buildMealPlan() function...')
-    setUserMealPlanPref()
+    preferences = setUserMealPlanPref()
+    # weekDays = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
+    return
+    for day in weekDays:
+        mealPlan[day] = {}
+        askForMeal(preferences, day)
 
 def getVoiceInput():
     logging.info('Entering getVoiceInput() function...')
@@ -38,4 +45,27 @@ def setUserMealPlanPref():
 
     logging.info(f'Meal preferences: {mealPreferences}')
     logging.info("Food preferences successfully saved.")
+    if not debugMode:
+        speak('Ho salvato con successo le preferenze!')
     return mealPreferences
+
+def askForMeal(preferences, day):
+    logging.info('Entering askForMeal() function...')
+    prompt = (
+    'You are a meal plan specialized assistant.'
+    'You speak italian.'
+    'The user has expressed these preferences:',
+    f'- Restrictions: {preferences["restrictions"]}',
+    f'- Preferences: {preferences["preferences"]}',
+    f'- Food to avoid: {preferences["foodToAvoid"]}',
+    f'- Favorite food: {preferences["favoriteFood"]}',
+    f'- Daily meal count: {preferences["dailyMealNum"]}',
+    f'- Wants variety: {preferences["variety"]}',
+    f'Generate a meal plan for {day} with {preferences["dailyMealNum"]} meals. Do not include descriptions, only the names of the dishes, separated by commas.',
+    'Talk with the user till you understand he is satisfied with the daily meal plan and return the choices in this format: "day": {"breakfast": "x", "lunch": "y", "dinner": "q"}'
+    )
+
+    response = groqClient.chat.completions.create(messages=[{"role": "user", "content": prompt}], model=groqModel)
+    # return response.choices[0].message.content.split(", ")
+    print(f'res: {response.choices[0].message.content}')
+    return response.choices[0].message.content

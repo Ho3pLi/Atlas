@@ -73,3 +73,6 @@ r = sr.Recognizer()
 mic = sr.Microphone()
 
 debugMode = True
+
+mealPreferences = None
+lastPlannedMealDay = None

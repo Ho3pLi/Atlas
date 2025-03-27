@@ -1,6 +1,6 @@
 import logging
 
-from atlas.config import groqClient, convo, groqModel, groqModel2
+from atlas.config import groqClient, convo, groqModel, groqModel2, mealPreferences
 
 def groqPrompt(prompt, imgContext=None, filePath=None, weatherData=None):
     if imgContext:
@@ -9,6 +9,8 @@ def groqPrompt(prompt, imgContext=None, filePath=None, weatherData=None):
         prompt = f'\n\nUSER PROMPT: {prompt}\n\nPATH CONTEXT: {filePath}\n'
     elif weatherData:
         prompt = f'\n\nUSER PROMPT: {prompt}\n\nWEATHER CONTEXT: {weatherData}\n'
+    # elif mealPreferences:
+    #     prompt = f'\n\nUSER PROMPT: {prompt}\n\nMEAL PREFERENCES: {mealPreferences}\n'
 
     model =  groqModel if len(prompt) < 50 else groqModel2
     logging.info(f"[Groq] Sending request - Model: {model} | Prompt: {prompt}")
