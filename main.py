@@ -2,6 +2,9 @@ import logging
 from atlas.config import logPath, debugMode
 import atlas
 
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
+
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO,
@@ -58,8 +61,9 @@ def processUserPrompt(cleanPrompt):
     weatherData = None
 
     if 'take screenshot' in call:
-        atlas.takeScreenshot()
-        visualContext = atlas.visionPrompt(cleanPrompt, atlas.screenshotPath)
+        screenRes = atlas.takeScreenshot()
+        if screenRes:
+            visualContext = atlas.visionPrompt(cleanPrompt, atlas.screenshotPath)
     elif 'search file' in call:
         filePath = atlas.handleFileSearchPrompt(cleanPrompt)
     elif 'get weather' in call:

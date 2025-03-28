@@ -1,4 +1,5 @@
 import os
+import logging
 from dotenv import load_dotenv
 from openai import OpenAI
 from groq import Groq
@@ -16,10 +17,19 @@ porcupineApiKey = os.getenv('porcupineApiKey')
 narakeetApiKey = os.getenv('narakeetApiKey')
 
 wakeWordModel = 'atlas/models/atlas.ppn'
+os.makedirs(os.path.dirname(wakeWordModel), exist_ok=True)
+
 porcupineModelPath = 'atlas/models/porcupine_params_it.pv'
+os.makedirs(os.path.dirname(porcupineModelPath), exist_ok=True)
+
 screenshotPath = 'temp/screenshot.png'
+os.makedirs(os.path.dirname(screenshotPath), exist_ok=True)
+
 promptPath = 'temp/prompt.wav'
+os.makedirs(os.path.dirname(promptPath), exist_ok=True)
+
 logPath = 'logs/atlas.log'
+os.makedirs(os.path.dirname(logPath), exist_ok=True)
 
 groqClient = Groq(api_key=groqApiKey)
 genai.configure(api_key=googleApiKey)
@@ -29,7 +39,8 @@ groqModel = 'llama-3.1-8b-instant'
 groqModel2 = 'llama-3.3-70b-versatile'
 
 enableTTS = False
-allowedDirs = [os.path.expanduser('~/Documents/AtlasDir')]
+# allowedDirs = [os.path.expanduser('~/Documents/AtlasDir')]
+allowedDirs = [os.path.expanduser('~/workspaces/Atlas/atlas')]
 
 sysMsg = (
     'You are a multi—modal AI voice assistant. Your name is Atlas. You speak italian. Your user may or may not have attached a photo for context '
@@ -70,7 +81,11 @@ whisperModel = WhisperModel(
 )
 
 r = sr.Recognizer()
-mic = sr.Microphone()
+try:
+    mic = sr.Microphone()
+except OSError:
+    mic = None
+    logging.info('No microphone avaible.')
 
 debugMode = True
 
