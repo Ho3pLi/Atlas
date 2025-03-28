@@ -10,7 +10,7 @@ def takeScreenshot():
         screenshot = ImageGrab.grab()
     except OSError as e:
         logging.warning(f"Screenshot not avaible: {e}")
-    return None
+        return None
 
     rgbScreenshot = screenshot.convert('RGB')
     rgbScreenshot.save(screenshotPath, quality=15)
