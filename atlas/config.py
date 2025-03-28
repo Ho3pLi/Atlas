@@ -39,8 +39,7 @@ groqModel = 'llama-3.1-8b-instant'
 groqModel2 = 'llama-3.3-70b-versatile'
 
 enableTTS = False
-# allowedDirs = [os.path.expanduser('~/Documents/AtlasDir')]
-allowedDirs = [os.path.expanduser('~/workspaces/Atlas/atlas')]
+allowedDirs = [os.path.expanduser('~/Documents/AtlasDir')]
 
 sysMsg = (
     'You are a multi—modal AI voice assistant. Your name is Atlas. You speak italian. Your user may or may not have attached a photo for context '
