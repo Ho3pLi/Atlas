@@ -53,12 +53,13 @@ def processUserPrompt(cleanPrompt):
 
             if atlas.enableTTS:
                 atlas.speak(summary)
-        return  
+        return     
 
     call = atlas.functionCall(cleanPrompt)
     visualContext = None
     filePath = None
     weatherData = None
+    mealSuggestion = None
 
     if 'take screenshot' in call:
         screenRes = atlas.takeScreenshot()
@@ -69,11 +70,15 @@ def processUserPrompt(cleanPrompt):
     elif 'get weather' in call:
         weatherData = atlas.handleWeatherPrompt(cleanPrompt)
     elif 'build meal plan' in call:
-        atlas.buildMealPlan()
-        return
-        # print('ao')
+        if atlas.lastDayPlanned:
+            mealSuggestion = atlas.buildMealPlan(atlas.lastDayPlanned)
+        else:
+            mealSuggestion = atlas.buildMealPlan()
+            print(f'Meal plan: {atlas.mealPlan}')
+    # elif 'change meal suggestion' in call:
 
-    response = atlas.groqPrompt(cleanPrompt, visualContext, filePath, weatherData)
+
+    response = atlas.groqPrompt(cleanPrompt, visualContext, filePath, weatherData, mealSuggestion)
 
     if atlas.enableTTS:
         atlas.speak(response)

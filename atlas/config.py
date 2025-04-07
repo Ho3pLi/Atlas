@@ -89,4 +89,6 @@ except OSError:
 debugMode = True
 
 mealPreferences = None
-lastPlannedMealDay = None
+weekDays = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
+lastDayPlanned = None
+mealPlan = None
