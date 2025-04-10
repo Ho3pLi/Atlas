@@ -1,27 +1,38 @@
 import logging
-from atlas.config import debugMode, groqClient, groqModel, mealPreferences, weekDays, lastDayPlanned, mealPlan
+import re
+
+import atlas.config as config
 from atlas.tts import speak
 from atlas.audioProcessing import waveToText
 
-def buildMealPlan(day=weekDays[0]):
+def buildMealPlan(day=config.weekDays[0]):
     logging.info('Entering buildMealPlan() function...')
-    setUserMealPlanPref()
+    if not config.debugMode:
+        setUserMealPlanPref()
+    else:
+        config.mealPreferences = {
+            'restrictions': 'no',
+            'preferences': 'pochi grassi',
+            'foodToAvoid': 'pesce',
+            'favoriteFood': 'frutta',
+            'dailyMealNum': '5',
+            'variety': 'si'
+        }
     return askForMeal(day)
 
 def getVoiceInput():
     logging.info('Entering getVoiceInput() function...')
-    if not debugMode:
+    if not config.debugMode:
         speak("Sono pronto, dimmi!")
         text = waveToText("temp/prompt.wav")
         return text.strip()
     else:
-        return input(f'USER: ')
+        return input('USER: ')
 
 def setUserMealPlanPref():
-    global mealPreferences
     logging.info("Entering setUserMealPlanPref() function...")
+    config.mealPreferences = {}
 
-    mealPreferences = {}
     questions = {
         "restrictions": "Hai delle restrizioni alimentari? Ad esempio, sei vegetariano o intollerante a qualcosa?",
         "preferences": "Hai delle preferenze particolari? Ad esempio, vuoi più proteine o pasti leggeri la sera?",
@@ -32,80 +43,32 @@ def setUserMealPlanPref():
     }
 
     for key, question in questions.items():
-        if not debugMode:
+        if not config.debugMode:
             speak(question)
         else:
             logging.info(question)
-        mealPreferences[key] = getVoiceInput()
+        config.mealPreferences[key] = getVoiceInput()
 
-    logging.info(f'Meal preferences: {mealPreferences}')
+    logging.info(f'Meal preferences: {config.mealPreferences}')
     logging.info("Food preferences successfully saved.")
-    if not debugMode:
+    if not config.debugMode:
         speak('Ho salvato con successo le preferenze!')
-    return mealPreferences
-
-# def askForMeal(day):
-#     logging.info('Entering askForMeal() function...')
-#     global lastDayPlanned, mealPlan
-#     logging.info(f'Asking for meal suggestion for {day}...')
-#     logging.info(f'Last day planned: {lastDayPlanned}')
-#     logging.info(f'Meal plan: {mealPlan}')
-#     prompt = (
-#         "You are a meal plan specialized assistant.\n"
-#         "You must reply ONLY in Italian, using exactly these keys:\n"
-#         "colazione, spuntino1, pranzo, spuntino2, cena.\n"
-#         "Each key must be followed by a colon and the corresponding suggested dish.\n"
-#         "No introductions, no extra formatting, just the plan.\n"
-#         "User preferences are:\n"
-#         f"- Restrictions: {mealPreferences['restrictions']}\n"
-#         f"- Preferences: {mealPreferences['preferences']}\n"
-#         f"- Food to avoid: {mealPreferences['foodToAvoid']}\n"
-#         f"- Favorite food: {mealPreferences['favoriteFood']}\n"
-#         f"- Daily meal count: {mealPreferences['dailyMealNum']}\n"
-#         f"- Wants variety: {mealPreferences['variety']}\n"
-#         f"Generate a meal plan for {day} using the keys and structure described above."
-#     )
-#     lastDayPlanned = day
-#     response = groqClient.chat.completions.create(messages=[{"role": "user", "content": prompt}], model=groqModel)
-#     # return response.choices[0].message.content.split(", ")
-#     suggestion = response.choices[0].message.content.strip()
-#     logging.info(f'Suggestion for {day}: {suggestion}')
-#     meals = [x.strip() for x in suggestion.split(",") if x.strip()]
-#     logging.info(f'Meals: {meals}')
-#     mealKeys = ["colazione", "spuntino1", "pranzo", "spuntino2", "cena"]
-
-#     try:
-#         desiredCount = int(mealPreferences['dailyMealNum'])
-#     except ValueError:
-#         desiredCount = 3
-
-#     if mealPlan is None:
-#         mealPlan = {}
-#     mealPlan[day] = {
-#         mealKeys[i]: meals[i] if i < len(meals) else ""
-#         for i in range(desiredCount)
-#     }
-#     return suggestion
+    return config.mealPreferences
 
 def askForMeal(day):
-    import re
-
     logging.info('Entering askForMeal() function...')
-    global lastDayPlanned, mealPlan
 
     mealKeys = ["colazione", "spuntino1", "pranzo", "spuntino2", "cena"]
 
-    # Assicurati che mealPlan esista
-    if mealPlan is None:
-        mealPlan = {}
+    if config.mealPlan is None:
+        config.mealPlan = {}
 
     try:
-        desiredCount = int(mealPreferences['dailyMealNum'])
+        desiredCount = int(config.mealPreferences['dailyMealNum'])
     except (ValueError, TypeError):
         logging.warning("Invalid or missing 'dailyMealNum'. Falling back to 3.")
         desiredCount = 3
 
-    # Prompt
     prompt = (
         "You are a meal plan specialized assistant.\n"
         "You must reply ONLY in Italian, using exactly these keys:\n"
@@ -113,25 +76,24 @@ def askForMeal(day):
         "Each key must be followed by a colon and the corresponding suggested dish.\n"
         "No introductions, no explanations, just the plan.\n"
         "User preferences are:\n"
-        f"- Restrictions: {mealPreferences['restrictions']}\n"
-        f"- Preferences: {mealPreferences['preferences']}\n"
-        f"- Food to avoid: {mealPreferences['foodToAvoid']}\n"
-        f"- Favorite food: {mealPreferences['favoriteFood']}\n"
-        f"- Daily meal count: {mealPreferences['dailyMealNum']}\n"
-        f"- Wants variety: {mealPreferences['variety']}\n"
+        f"- Restrictions: {config.mealPreferences['restrictions']}\n"
+        f"- Preferences: {config.mealPreferences['preferences']}\n"
+        f"- Food to avoid: {config.mealPreferences['foodToAvoid']}\n"
+        f"- Favorite food: {config.mealPreferences['favoriteFood']}\n"
+        f"- Daily meal count: {config.mealPreferences['dailyMealNum']}\n"
+        f"- Wants variety: {config.mealPreferences['variety']}\n"
         f"Generate a meal plan for {day} using the keys and structure described above."
     )
 
-    # Richiesta al modello
-    lastDayPlanned = day
-    response = groqClient.chat.completions.create(
+    config.lastDayPlanned = day
+    response = config.groqClient.chat.completions.create(
         messages=[{"role": "user", "content": prompt}],
-        model=groqModel
+        model=config.groqModel
     )
+
     suggestion = response.choices[0].message.content.strip()
     logging.info(f'Suggestion for {day}:\n{suggestion}')
 
-    # Parsing del testo in dizionario
     meals = {}
     for line in suggestion.splitlines():
         if ":" in line:
@@ -143,27 +105,27 @@ def askForMeal(day):
 
     logging.info(f'Parsed meals: {meals}')
 
-    # Riempimento mealPlan[day]
-    mealPlan[day] = {
+    config.mealPlan[day] = {
         key: meals.get(key, "")
         for key in mealKeys[:desiredCount]
     }
 
-    logging.info(f'Final meal plan for {day}: {mealPlan[day]}')
-    return mealPlan[day]
+    logging.info(f'Final meal plan for {day}: {config.mealPlan[day]}')
+    return config.mealPlan[day]
 
-def changeMealSuggestion(day):
+def changeMealSuggestion(day, previousSuggestion, additionalRequest=None):
     logging.info('Entering changeMealSuggestion() function...')
+
     prompt = (
         "You are a meal plan specialized assistant.\n"
         "You speak italian.\n"
         "The user has expressed these preferences:\n"
-        f"- Restrictions: {mealPreferences['restrictions']}\n"
-        f"- Preferences: {mealPreferences['preferences']}\n"
-        f"- Food to avoid: {mealPreferences['foodToAvoid']}\n"
-        f"- Favorite food: {mealPreferences['favoriteFood']}\n"
-        f"- Daily meal count: {mealPreferences['dailyMealNum']}\n"
-        f"- Wants variety: {mealPreferences['variety']}\n\n"
+        f"- Restrictions: {config.mealPreferences['restrictions']}\n"
+        f"- Preferences: {config.mealPreferences['preferences']}\n"
+        f"- Food to avoid: {config.mealPreferences['foodToAvoid']}\n"
+        f"- Favorite food: {config.mealPreferences['favoriteFood']}\n"
+        f"- Daily meal count: {config.mealPreferences['dailyMealNum']}\n"
+        f"- Wants variety: {config.mealPreferences['variety']}\n\n"
         f"The following meal plan for {day} was rejected by the user:\n"
         f"{previousSuggestion}\n\n"
         "Generate a new meal plan with different dishes.\n"
@@ -174,3 +136,12 @@ def changeMealSuggestion(day):
         prompt += f"The user has also requested: {additionalRequest}\n"
 
     prompt += "Return only the names of the dishes, separated by commas."
+
+    response = config.groqClient.chat.completions.create(
+        messages=[{"role": "user", "content": prompt}],
+        model=config.groqModel
+    )
+
+    newSuggestion = response.choices[0].message.content.strip()
+    logging.info(f'New suggestion for {day}:\n{newSuggestion}')
+    return newSuggestion

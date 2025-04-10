@@ -1,5 +1,4 @@
 import logging
-from atlas.config import logPath, debugMode
 import atlas
 
 for handler in logging.root.handlers[:]:
@@ -9,16 +8,16 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO,
     handlers=[
-        logging.FileHandler(logPath),
+        logging.FileHandler(atlas.config.logPath),
         logging.StreamHandler()
     ]
 )
 
-def callback(audio=None, debugMode=debugMode):
+def callback(audio=None, debugMode=atlas.config.debugMode):
     if not debugMode:
         logging.info("Audio received, thinking...")
 
-        promptAudioPath = atlas.promptPath
+        promptAudioPath = atlas.config.promptPath
         with open(promptAudioPath, 'wb') as f:
             f.write(audio.get_wav_data())
 
@@ -38,12 +37,12 @@ def callback(audio=None, debugMode=debugMode):
             
 
 def processUserPrompt(cleanPrompt):
-    if atlas.lastFileSearchResults:
-        chosenFile = atlas.handleFileChoice(cleanPrompt, atlas.lastFileSearchResults)
+    if atlas.config.lastFileSearchResults:
+        chosenFile = atlas.handleFileChoice(cleanPrompt, atlas.config.lastFileSearchResults)
         
         if chosenFile:
-            atlas.lastFileSearchResults.clear()
-            atlas.currentFilePath = chosenFile
+            atlas.config.lastFileSearchResults.clear()
+            atlas.config.currentFilePath = chosenFile
 
             fileContent = atlas.openFile(chosenFile)
             fileContent = fileContent[:2000] if fileContent else "No readable content."
@@ -51,7 +50,7 @@ def processUserPrompt(cleanPrompt):
             summaryPrompt = f"Summarize the following file content in 2-3 sentences: {fileContent}"
             summary = atlas.groqPrompt(summaryPrompt, None, None, None)
 
-            if atlas.enableTTS:
+            if atlas.config.enableTTS:
                 atlas.speak(summary)
         return     
 
@@ -64,27 +63,27 @@ def processUserPrompt(cleanPrompt):
     if 'take screenshot' in call:
         screenRes = atlas.takeScreenshot()
         if screenRes:
-            visualContext = atlas.visionPrompt(cleanPrompt, atlas.screenshotPath)
+            visualContext = atlas.visionPrompt(cleanPrompt, atlas.config.screenshotPath)
     elif 'search file' in call:
         filePath = atlas.handleFileSearchPrompt(cleanPrompt)
     elif 'get weather' in call:
         weatherData = atlas.handleWeatherPrompt(cleanPrompt)
     elif 'build meal plan' in call:
-        if atlas.lastDayPlanned:
-            mealSuggestion = atlas.buildMealPlan(atlas.lastDayPlanned)
+        if atlas.config.lastDayPlanned:
+            mealSuggestion = atlas.buildMealPlan(atlas.config.lastDayPlanned)
         else:
             mealSuggestion = atlas.buildMealPlan()
-            print(f'Meal plan: {atlas.mealPlan}')
+            print(f'Meal plan: {atlas.config.mealPlan}')
     # elif 'change meal suggestion' in call:
 
 
     response = atlas.groqPrompt(cleanPrompt, visualContext, filePath, weatherData, mealSuggestion)
 
-    if atlas.enableTTS:
+    if atlas.config.enableTTS:
         atlas.speak(response)
 
 if __name__ == "__main__":
-    if not debugMode:
+    if not atlas.config.debugMode:
         atlas.startListening()
     else:
         logging.info('Initializing Atlas in debug mode...')

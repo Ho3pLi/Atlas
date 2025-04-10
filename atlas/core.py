@@ -1,6 +1,6 @@
 import logging
 
-from atlas.config import groqClient, convo, groqModel, groqModel2
+import atlas.config as config
 
 def groqPrompt(prompt, imgContext=None, filePath=None, weatherData=None, mealSuggestion=None):
     if imgContext:
@@ -12,13 +12,13 @@ def groqPrompt(prompt, imgContext=None, filePath=None, weatherData=None, mealSug
     elif mealSuggestion:
         prompt = f'\n\nUSER PROMPT: {prompt}\n\nMEALS YOU HAVE TO SUGGEST: {mealSuggestion}\n'
 
-    model =  groqModel if len(prompt) < 50 else groqModel2
+    model =  config.groqModel if len(prompt) < 50 else config.groqModel2
     logging.info(f"[Groq] Sending request - Model: {model} | Prompt: {prompt}")
 
-    convo.append({'role':'user', 'content':prompt})
-    chatCompletion = groqClient.chat.completions.create(messages=convo, model=model)
+    config.convo.append({'role':'user', 'content':prompt})
+    chatCompletion = config.groqClient.chat.completions.create(messages=config.convo, model=model)
     response = chatCompletion.choices[0].message
-    convo.append(response)
+    config.convo.append(response)
 
     logging.info(f"[Groq] Response received: {response.content}")
     return response.content
@@ -33,7 +33,7 @@ def functionCall(prompt):
     )
 
     functionConvo = [{'role':'system', 'content':sysMsg}, {'role':'user', 'content':prompt}]
-    chatCompletion = groqClient.chat.completions.create(messages=functionConvo, model=groqModel2)
+    chatCompletion = config.groqClient.chat.completions.create(messages=functionConvo, model=config.groqModel2)
     response = chatCompletion.choices[0].message
 
     logging.info(f"Chosen function: {response.content}")
