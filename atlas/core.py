@@ -10,7 +10,7 @@ def groqPrompt(prompt, imgContext=None, filePath=None, weatherData=None, mealSug
     elif weatherData:
         prompt = f'\n\nUSER PROMPT: {prompt}\n\nWEATHER CONTEXT: {weatherData}\n'
     elif mealSuggestion:
-        prompt = f'\n\nUSER PROMPT: {prompt}\n\nMEALS YOU HAVE TO SUGGEST: {mealSuggestion}\n'
+        prompt = f'\n\nUSER PROMPT: {prompt}\n\nMEALS YOU HAVE TO SUGGEST AS YOU HAD THOUGHT OF THEM: {mealSuggestion}\n\nIN THE END ASK THE USER IF THEY WANT TO CHANGE THEM\n'
 
     model =  config.groqModel if len(prompt) < 50 else config.groqModel2
     logging.info(f"[Groq] Sending request - Model: {model} | Prompt: {prompt}")

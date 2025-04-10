@@ -52,7 +52,9 @@ def processUserPrompt(cleanPrompt):
 
             if atlas.config.enableTTS:
                 atlas.speak(summary)
-        return     
+        return
+    
+    
 
     call = atlas.functionCall(cleanPrompt)
     visualContext = None
@@ -73,7 +75,6 @@ def processUserPrompt(cleanPrompt):
             mealSuggestion = atlas.buildMealPlan(atlas.config.lastDayPlanned)
         else:
             mealSuggestion = atlas.buildMealPlan()
-            print(f'Meal plan: {atlas.config.mealPlan}')
     # elif 'change meal suggestion' in call:
 
 

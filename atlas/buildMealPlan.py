@@ -1,5 +1,4 @@
 import logging
-import re
 
 import atlas.config as config
 from atlas.tts import speak
