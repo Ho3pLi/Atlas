@@ -40,22 +40,23 @@ def process_user_prompt(clean_prompt):
         _speak_if_enabled(response)
         return
 
-    call = atlas.functionCall(clean_prompt)
+    intent = atlas.functionCall(clean_prompt)
+    action = intent["action"]
     visual_context = None
     weather_data = None
     meal_suggestion = None
     response = None
 
-    if "take screenshot" in call:
+    if action == "take_screenshot":
         screenshot_result = atlas.takeScreenshot()
         if screenshot_result:
             visual_context = atlas.visionPrompt(clean_prompt, atlas.config.app.screenshot_path)
-    elif "search file" in call:
+    elif action == "search_file":
         search_outcome = atlas.handleFileSearchPrompt(clean_prompt)
         response = search_outcome["message"]
-    elif "get weather" in call:
+    elif action == "get_weather":
         weather_data = atlas.handleWeatherPrompt(clean_prompt)
-    elif "build meal plan" in call:
+    elif action == "build_meal_plan":
         if atlas.config.session.last_day_planned:
             meal_suggestion = atlas.buildMealPlan(atlas.config.session.last_day_planned)
         else:
