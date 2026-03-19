@@ -42,10 +42,23 @@ def process_user_prompt(clean_prompt):
 
     intent = atlas.functionCall(clean_prompt)
     action = intent["action"]
+    logging.info(
+        "Intent routing result: action=%s confidence=%.2f needs_clarification=%s source=%s reason=%s",
+        intent["action"],
+        intent["confidence"],
+        intent["needs_clarification"],
+        intent["source"],
+        intent["reason"],
+    )
     visual_context = None
     weather_data = None
     meal_suggestion = None
     response = None
+
+    if intent["needs_clarification"]:
+        response = "Non ho capito con sufficiente certezza cosa vuoi fare. Riformula la richiesta in modo piu specifico."
+        _speak_if_enabled(response)
+        return
 
     if action == "take_screenshot":
         screenshot_result = atlas.takeScreenshot()
