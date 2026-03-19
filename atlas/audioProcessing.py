@@ -1,11 +1,11 @@
 import logging
 
-from atlas.config import whisperModel
+import atlas.config as config
 
 def waveToText(audioPath):
     logging.info(f"Transcribing audio: {audioPath}")
-    segments, _ = whisperModel.transcribe(audioPath, language='it')
-    text = ' '.join([segment.text for segment in segments])
+    segments, _ = config.get_whisper_model().transcribe(audioPath, language="it")
+    text = " ".join([segment.text for segment in segments])
 
     logging.info(f"Transcribed text: {text}")
     return text

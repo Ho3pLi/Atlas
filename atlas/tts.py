@@ -3,17 +3,17 @@ import requests
 import pydub
 from pydub.playback import play
 
-from atlas.config import narakeetApiKey
+import atlas.config as config
 
 def speak(text):    
-    if not narakeetApiKey:
+    if not config.app.narakeet_api_key:
         raise ValueError("API key not found.")
 
     url = "https://api.narakeet.com/text-to-speech/m4a?voice=vincenzo"
     headers = {
         "Accept": "application/octet-stream",
         "Content-Type": "text/plain",
-        "x-api-key": narakeetApiKey,
+        "x-api-key": config.app.narakeet_api_key,
     }
 
     response = requests.post(url, headers=headers, data=text.encode("utf-8"))

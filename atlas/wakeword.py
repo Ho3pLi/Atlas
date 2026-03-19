@@ -3,16 +3,21 @@ import pvporcupine
 import pyaudio
 import struct
 
-from atlas.config import porcupineApiKey, wakeWordModel, porcupineModelPath, r, mic
+import atlas.config as config
 from main import callback
 
 def startListening():
     logging.info('Initializing startListening() function...')
     porcupine = pvporcupine.create(
-        access_key=porcupineApiKey,
-        keyword_paths=[wakeWordModel],
-        model_path=porcupineModelPath
+        access_key=config.app.porcupine_api_key,
+        keyword_paths=[config.app.wake_word_model],
+        model_path=config.app.porcupine_model_path
     )
+
+    recognizer = config.get_recognizer()
+    microphone = config.get_microphone()
+    if microphone is None:
+        raise RuntimeError("Microphone not available.")
 
     pa = pyaudio.PyAudio()
     audio_stream = pa.open(
@@ -33,10 +38,10 @@ def startListening():
 
             if keyword_index >= 0:
                 logging.info("Wake word detected! Listening for prompt...")
-                with mic as m:
-                    r.adjust_for_ambient_noise(m, duration=0.5)
+                with microphone as m:
+                    recognizer.adjust_for_ambient_noise(m, duration=0.5)
                     logging.info("Capturing prompt...")
-                    audio = r.listen(m)
+                    audio = recognizer.listen(m)
                     callback(audio)
 
     except KeyboardInterrupt:

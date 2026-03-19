@@ -1,26 +1,72 @@
-# Core functionalities
-from .core import groqPrompt, functionCall
+from importlib import import_module
 
-# Voice and TTS
-from .tts import speak
-
-# Screenshot and visual context
-from .screenshot import takeScreenshot, visionPrompt
-
-# File handling
-from .fileHandler import handleFileSearchPrompt, handleFileChoice, openFile
-
-# Weather handling
-from .weather import handleWeatherPrompt
-
-# Wakeword and listening loop
-from .wakeword import startListening
-
-# Audio processing
-from .audioProcessing import waveToText, extractPrompt
-
-# Meal plan logic
-from .buildMealPlan import buildMealPlan, askForMeal, changeMealSuggestion, setUserMealPlanPref
-
-# Import config as a module to preserve shared global state
 import atlas.config as config
+
+
+def _load_attr(module_name, attr_name):
+    module = import_module(module_name, package=__name__)
+    return getattr(module, attr_name)
+
+
+def groqPrompt(*args, **kwargs):
+    return _load_attr(".core", "groqPrompt")(*args, **kwargs)
+
+
+def functionCall(*args, **kwargs):
+    return _load_attr(".core", "functionCall")(*args, **kwargs)
+
+
+def speak(*args, **kwargs):
+    return _load_attr(".tts", "speak")(*args, **kwargs)
+
+
+def takeScreenshot(*args, **kwargs):
+    return _load_attr(".screenshot", "takeScreenshot")(*args, **kwargs)
+
+
+def visionPrompt(*args, **kwargs):
+    return _load_attr(".screenshot", "visionPrompt")(*args, **kwargs)
+
+
+def handleFileSearchPrompt(*args, **kwargs):
+    return _load_attr(".fileHandler", "handleFileSearchPrompt")(*args, **kwargs)
+
+
+def handleFileChoice(*args, **kwargs):
+    return _load_attr(".fileHandler", "handleFileChoice")(*args, **kwargs)
+
+
+def openFile(*args, **kwargs):
+    return _load_attr(".fileHandler", "openFile")(*args, **kwargs)
+
+
+def handleWeatherPrompt(*args, **kwargs):
+    return _load_attr(".weather", "handleWeatherPrompt")(*args, **kwargs)
+
+
+def startListening(*args, **kwargs):
+    return _load_attr(".wakeword", "startListening")(*args, **kwargs)
+
+
+def waveToText(*args, **kwargs):
+    return _load_attr(".audioProcessing", "waveToText")(*args, **kwargs)
+
+
+def extractPrompt(*args, **kwargs):
+    return _load_attr(".audioProcessing", "extractPrompt")(*args, **kwargs)
+
+
+def buildMealPlan(*args, **kwargs):
+    return _load_attr(".buildMealPlan", "buildMealPlan")(*args, **kwargs)
+
+
+def askForMeal(*args, **kwargs):
+    return _load_attr(".buildMealPlan", "askForMeal")(*args, **kwargs)
+
+
+def changeMealSuggestion(*args, **kwargs):
+    return _load_attr(".buildMealPlan", "changeMealSuggestion")(*args, **kwargs)
+
+
+def setUserMealPlanPref(*args, **kwargs):
+    return _load_attr(".buildMealPlan", "setUserMealPlanPref")(*args, **kwargs)

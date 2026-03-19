@@ -1,11 +1,11 @@
 import logging
 from PIL import ImageGrab, Image
 
-from atlas.config import model, screenshotPath
+import atlas.config as config
 
 def takeScreenshot():
     logging.info('Entering takeScreenshot() function...')
-    logging.info(f"Taking a screenshot in {screenshotPath}...")
+    logging.info(f"Taking a screenshot in {config.app.screenshot_path}...")
     try:
         screenshot = ImageGrab.grab()
     except OSError as e:
@@ -13,7 +13,7 @@ def takeScreenshot():
         return None
 
     rgbScreenshot = screenshot.convert('RGB')
-    rgbScreenshot.save(screenshotPath, quality=15)
+    rgbScreenshot.save(config.app.screenshot_path, quality=15)
     logging.info("Screenshot successfully saved.")
     return True
 
@@ -28,7 +28,7 @@ def visionPrompt(prompt, photoPath):
             'relevant to the user prompt. Then generate as much objective data about the image for the AI '
             f'assistant who will respond to the user. \nUSER PROMPT: {prompt}'
         )
-        response = model.generate_content([prompt, img])
+        response = config.get_gemini_model().generate_content([prompt, img])
         logging.info(f'Response in visionPrompt(): {response.text}')
         return response.text
     else:

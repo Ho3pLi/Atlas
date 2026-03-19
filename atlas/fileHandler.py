@@ -6,27 +6,26 @@ import mimetypes
 import pdfplumber
 from docx import Document
 
-from atlas.config import allowedDirs, groqClient, lastFileSearchResults, groqModel
+import atlas.config as config
 
 def handleFileSearchPrompt(prompt):
     logging.info('Entering handleSearchPrompt() function...')
-    global lastFileSearchResults
 
     info = extractFileInfo(prompt)
     filename, extension = info["filename"], info["extension"]
 
     all_results = set()
 
-    exact_results = exactSearch(filename, extension, allowedDirs)
+    exact_results = exactSearch(filename, extension, config.app.allowed_dirs)
     all_results.update(exact_results)
 
     if len(all_results) == 0:
-        fuzzy_results = fuzzySearch(filename, allowedDirs)
+        fuzzy_results = fuzzySearch(filename, config.app.allowed_dirs)
         all_results.update(fuzzy_results)
 
     if len(all_results) < 5 and len(all_results) >= 2:
         semantic_keywords = extractSemanticKeywords(prompt)
-        semantic_results = semanticSearch(semantic_keywords, allowedDirs)
+        semantic_results = semanticSearch(semantic_keywords, config.app.allowed_dirs)
         all_results.update(semantic_results[:5])
 
     all_results = list(all_results)[:5]
@@ -34,17 +33,17 @@ def handleFileSearchPrompt(prompt):
 
     if not all_results:
         response = "I'm sorry, I couldn't find any files matching your request."
-        lastFileSearchResults.clear()
+        config.session.last_file_search_results.clear()
     elif len(all_results) == 1:
         path = list(all_results)[0]
         response = f"I've found the requested file:\n{path}"
-        lastFileSearchResults.clear()
+        config.session.last_file_search_results.clear()
     else:
         response = "I've found multiple files possibly matching your request:\n"
-        lastFileSearchResults.clear()
-        lastFileSearchResults.extend(all_results)
+        config.session.last_file_search_results.clear()
+        config.session.last_file_search_results.extend(all_results)
         
-        for idx, file in enumerate(lastFileSearchResults, start=1):
+        for idx, file in enumerate(config.session.last_file_search_results, start=1):
             response += f"{idx}. {os.path.basename(file)}\n"
         response += "Please specify which one you want by voice."
 
@@ -67,16 +66,17 @@ def extractFileInfo(prompt):
         'ALWAYS respond in this exact JSON format: {"filename":"filename", "extension":".ext"} or {"filename":"filename", "extension":"NONE"}'
     )
 
-    chatCompletion = groqClient.chat.completions.create(
+    chatCompletion = config.get_groq_client().chat.completions.create(
         messages=[{'role':'system', 'content':sysMsg}, {'role':'user', 'content':prompt}],
-        model= groqModel  
+        model=config.app.groq_model
     )
     response = chatCompletion.choices[0].message.content
     logging.info(f'Response in extractFileInfo(): {response}')
     return json.loads(response)
 
-def exactSearch(filename, extension, allowedDirs=allowedDirs):
+def exactSearch(filename, extension, allowedDirs=None):
     logging.info('Entering exactSearch() function...')
+    allowedDirs = allowedDirs or config.app.allowed_dirs
     results = []
     for base_dir in allowedDirs:
         expanded_dir = os.path.expanduser(base_dir)
@@ -95,8 +95,9 @@ def exactSearch(filename, extension, allowedDirs=allowedDirs):
     logging.info(f'exactSearch res: {results}')
     return results
 
-def fuzzySearch(filename, allowedDirs=allowedDirs, cutoff=0.8):
+def fuzzySearch(filename, allowedDirs=None, cutoff=0.8):
     logging.info('Entering fuzzySearch() function...')
+    allowedDirs = allowedDirs or config.app.allowed_dirs
     results = []
     for base_dir in allowedDirs:
         expanded_dir = os.path.expanduser(base_dir)
@@ -123,16 +124,17 @@ def extractSemanticKeywords(prompt):
         "on a user's computer. Return only a JSON array of keywords."
     )
 
-    chatCompletion = groqClient.chat.completions.create(
+    chatCompletion = config.get_groq_client().chat.completions.create(
         messages=[{'role':'system', 'content':sysMsg}, {'role':'user', 'content':prompt}],
-        model= groqModel
+        model=config.app.groq_model
     )
 
     response = chatCompletion.choices[0].message.content
     logging.info(f'Response in extractSemanticKeywords(): {response}')
     return json.loads(response)
 
-def semanticSearch(keywords, allowedDirs=allowedDirs):
+def semanticSearch(keywords, allowedDirs=None):
+    allowedDirs = allowedDirs or config.app.allowed_dirs
     matches = []
     for base_dir in allowedDirs:
         expanded_dir = os.path.expanduser(base_dir)
@@ -171,11 +173,11 @@ def handleFileChoice(user_choice, fileList):
         "\nRespond ONLY with the exact filename, nothing else."
     )
 
-    response = groqClient.chat.completions.create(
+    response = config.get_groq_client().chat.completions.create(
         messages=[
             {'role':'system', 'content': promptLLM}
         ],
-        model= groqModel
+        model=config.app.groq_model
     )
 
     chosenFilename = response.choices[0].message.content.strip()

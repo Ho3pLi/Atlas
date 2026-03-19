@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timedelta
 import requests
 
-from atlas.config import groqClient, weatherApiKey, groqModel
+import atlas.config as config
 
 def handleWeatherPrompt(prompt):
     logging.info('Entering handleWeatherPrompt() function...')
@@ -28,9 +28,9 @@ def extractWeatherInfo(prompt):
         "Respond always in JSON: {\"city\":\"city_name\",\"date\":\"YYYY-MM-DD/tomorrow/today/weekday\"}"
     )
 
-    chatCompletion = groqClient.chat.completions.create(
-        messages=[{'role':'system', 'content':sysMsg}, {'role':'user', 'content':prompt}],
-        model= groqModel
+    chatCompletion = config.get_groq_client().chat.completions.create(
+        messages=[{"role": "system", "content": sysMsg}, {"role": "user", "content": prompt}],
+        model=config.app.groq_model
     )
 
     response = chatCompletion.choices[0].message.content
@@ -86,7 +86,7 @@ def getWeather(city, lang="it", units="metric", date='today'):
     baseUrl = "http://api.openweathermap.org/data/2.5/"
 
     if date == 'today':
-        url = f"{baseUrl}weather?q={city}&appid={weatherApiKey}&units={units}&lang={lang}"
+        url = f"{baseUrl}weather?q={city}&appid={config.app.weather_api_key}&units={units}&lang={lang}"
         response = requests.get(url).json()
         
         if response.get('cod') != 200:
@@ -96,7 +96,7 @@ def getWeather(city, lang="it", units="metric", date='today'):
         temp = response['main']['temp']
         return f"Today's weather in {city}: {weather_desc}, temperature {temp}°C."
     else:
-        url = f"{baseUrl}forecast?q={city}&appid={weatherApiKey}&units={units}&lang={lang}"
+        url = f"{baseUrl}forecast?q={city}&appid={config.app.weather_api_key}&units={units}&lang={lang}"
         response = requests.get(url).json()
 
         if response.get('cod') != "200":

@@ -12,13 +12,16 @@ def groqPrompt(prompt, imgContext=None, filePath=None, weatherData=None, mealSug
     elif mealSuggestion:
         prompt = f'\n\nUSER PROMPT: {prompt}\n\nMEALS YOU HAVE TO SUGGEST AS YOU HAD THOUGHT OF THEM: {mealSuggestion}\n\nIN THE END ASK THE USER IF THEY WANT TO CHANGE THEM\n'
 
-    model =  config.groqModel if len(prompt) < 50 else config.groqModel2
+    model = config.app.groq_model if len(prompt) < 50 else config.app.groq_model2
     logging.info(f"[Groq] Sending request - Model: {model} | Prompt: {prompt}")
 
-    config.convo.append({'role':'user', 'content':prompt})
-    chatCompletion = config.groqClient.chat.completions.create(messages=config.convo, model=model)
+    config.session.conversation.append({"role": "user", "content": prompt})
+    chatCompletion = config.get_groq_client().chat.completions.create(
+        messages=config.session.conversation,
+        model=model,
+    )
     response = chatCompletion.choices[0].message
-    config.convo.append(response)
+    config.session.conversation.append({"role": response.role, "content": response.content})
 
     logging.info(f"[Groq] Response received: {response.content}")
     return response.content
@@ -33,7 +36,10 @@ def functionCall(prompt):
     )
 
     functionConvo = [{'role':'system', 'content':sysMsg}, {'role':'user', 'content':prompt}]
-    chatCompletion = config.groqClient.chat.completions.create(messages=functionConvo, model=config.groqModel2)
+    chatCompletion = config.get_groq_client().chat.completions.create(
+        messages=functionConvo,
+        model=config.app.groq_model2,
+    )
     response = chatCompletion.choices[0].message
 
     logging.info(f"Chosen function: {response.content}")
