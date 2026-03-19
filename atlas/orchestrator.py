@@ -35,21 +35,24 @@ def run_debug_loop():
 
 
 def process_user_prompt(clean_prompt):
-    if _handle_file_selection(clean_prompt):
+    handled, response = _handle_file_selection(clean_prompt)
+    if handled:
+        _speak_if_enabled(response)
         return
 
     call = atlas.functionCall(clean_prompt)
     visual_context = None
-    file_path = None
     weather_data = None
     meal_suggestion = None
+    response = None
 
     if "take screenshot" in call:
         screenshot_result = atlas.takeScreenshot()
         if screenshot_result:
             visual_context = atlas.visionPrompt(clean_prompt, atlas.config.app.screenshot_path)
     elif "search file" in call:
-        file_path = atlas.handleFileSearchPrompt(clean_prompt)
+        search_outcome = atlas.handleFileSearchPrompt(clean_prompt)
+        response = search_outcome["message"]
     elif "get weather" in call:
         weather_data = atlas.handleWeatherPrompt(clean_prompt)
     elif "build meal plan" in call:
@@ -58,10 +61,10 @@ def process_user_prompt(clean_prompt):
         else:
             meal_suggestion = atlas.buildMealPlan()
 
-    response = atlas.groqPrompt(clean_prompt, visual_context, file_path, weather_data, meal_suggestion)
+    if response is None:
+        response = atlas.groqPrompt(clean_prompt, visual_context, None, weather_data, meal_suggestion)
 
-    if atlas.config.app.enable_tts:
-        atlas.speak(response)
+    _speak_if_enabled(response)
 
 
 def run():
@@ -75,23 +78,19 @@ def run():
 
 def _handle_file_selection(clean_prompt):
     if not atlas.config.session.last_file_search_results:
-        return False
+        return False, None
 
     chosen_file = atlas.handleFileChoice(clean_prompt, atlas.config.session.last_file_search_results)
 
     if not chosen_file:
-        return True
+        return True, "I couldn't determine which file you meant. Please say the number or the exact file name."
 
     atlas.config.session.last_file_search_results.clear()
     atlas.config.session.current_file_path = chosen_file
+    summary = atlas.summarizeFile(chosen_file)
+    return True, summary
 
-    file_content = atlas.openFile(chosen_file)
-    file_content = file_content[:2000] if file_content else "No readable content."
 
-    summary_prompt = f"Summarize the following file content in 2-3 sentences: {file_content}"
-    summary = atlas.groqPrompt(summary_prompt, None, None, None)
-
-    if atlas.config.app.enable_tts:
-        atlas.speak(summary)
-
-    return True
+def _speak_if_enabled(response):
+    if atlas.config.app.enable_tts and response:
+        atlas.speak(response)

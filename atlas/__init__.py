@@ -40,6 +40,14 @@ def openFile(*args, **kwargs):
     return _load_attr(".fileHandler", "openFile")(*args, **kwargs)
 
 
+def readFileContent(*args, **kwargs):
+    return _load_attr(".fileHandler", "readFileContent")(*args, **kwargs)
+
+
+def summarizeFile(*args, **kwargs):
+    return _load_attr(".fileHandler", "summarizeFile")(*args, **kwargs)
+
+
 def handleWeatherPrompt(*args, **kwargs):
     return _load_attr(".weather", "handleWeatherPrompt")(*args, **kwargs)
 
