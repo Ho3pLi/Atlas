@@ -1,13 +1,16 @@
 import logging
-import pvporcupine
-import pyaudio
 import struct
 
 import atlas.config as config
-from main import callback
 
-def startListening():
+def startListening(on_audio):
     logging.info('Initializing startListening() function...')
+    if not callable(on_audio):
+        raise ValueError("startListening requires a callable on_audio callback.")
+
+    import pvporcupine
+    import pyaudio
+
     porcupine = pvporcupine.create(
         access_key=config.app.porcupine_api_key,
         keyword_paths=[config.app.wake_word_model],
@@ -42,7 +45,7 @@ def startListening():
                     recognizer.adjust_for_ambient_noise(m, duration=0.5)
                     logging.info("Capturing prompt...")
                     audio = recognizer.listen(m)
-                    callback(audio)
+                    on_audio(audio)
 
     except KeyboardInterrupt:
         logging.info("Interrupted by user.")

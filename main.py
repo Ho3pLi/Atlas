@@ -88,7 +88,7 @@ def processUserPrompt(cleanPrompt):
 
 if __name__ == "__main__":
     if not atlas.config.app.debug_mode:
-        atlas.startListening()
+        atlas.startListening(callback)
     else:
         logging.info('Initializing Atlas in debug mode...')
         callback()
