@@ -70,3 +70,15 @@ def changeMealSuggestion(*args, **kwargs):
 
 def setUserMealPlanPref(*args, **kwargs):
     return _load_attr(".buildMealPlan", "setUserMealPlanPref")(*args, **kwargs)
+
+
+def handle_audio(*args, **kwargs):
+    return _load_attr(".orchestrator", "handle_audio")(*args, **kwargs)
+
+
+def process_user_prompt(*args, **kwargs):
+    return _load_attr(".orchestrator", "process_user_prompt")(*args, **kwargs)
+
+
+def run(*args, **kwargs):
+    return _load_attr(".orchestrator", "run")(*args, **kwargs)
