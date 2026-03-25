@@ -33,7 +33,7 @@ class FileHandlerTests(unittest.TestCase):
             outcome = fileHandler.handleFileSearchPrompt("trova il file tesi")
 
         self.assertEqual(outcome["status"], "error")
-        self.assertIn("problem while searching", outcome["message"])
+        self.assertIn("problema durante la ricerca", outcome["message"])
 
 
 if __name__ == "__main__":

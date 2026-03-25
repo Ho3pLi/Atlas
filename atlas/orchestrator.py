@@ -113,7 +113,7 @@ def _handle_file_selection(clean_prompt):
     chosen_file = atlas.handleFileChoice(clean_prompt, atlas.config.session.last_file_search_results)
 
     if not chosen_file:
-        return True, "I couldn't determine which file you meant. Please say the number or the exact file name."
+        return True, "Non sono riuscito a capire quale file intendi. Di' il numero oppure il nome esatto del file."
 
     atlas.config.session.last_file_search_results.clear()
     atlas.config.session.current_file_path = chosen_file

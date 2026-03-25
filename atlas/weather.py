@@ -122,7 +122,7 @@ def next_weekday(current_date, weekday_name):
 def getWeather(city, lang="it", units="metric", date="today"):
     logging.info("Entering getWeather() function...")
     if not config.app.weather_api_key:
-        return _build_weather_error(city, date, "Weather API key is missing.")
+        return _build_weather_error(city, date, "Manca la chiave API per il servizio meteo.")
 
     base_url = "http://api.openweathermap.org/data/2.5/"
 
@@ -134,7 +134,7 @@ def getWeather(city, lang="it", units="metric", date="today"):
             payload = response.json()
 
             if payload.get("cod") != 200:
-                return _build_weather_error(city, date, "Unable to retrieve today's weather.")
+                return _build_weather_error(city, date, "Non sono riuscito a recuperare il meteo di oggi.")
 
             return {
                 "status": "ok",
@@ -151,14 +151,14 @@ def getWeather(city, lang="it", units="metric", date="today"):
         payload = response.json()
 
         if payload.get("cod") != "200":
-            return _build_weather_error(city, date, "Unable to retrieve the forecast.")
+            return _build_weather_error(city, date, "Non sono riuscito a recuperare le previsioni meteo.")
 
         target_date = datetime.strptime(date, "%Y-%m-%d").date()
         forecasts = payload["list"]
         target_forecasts = [item for item in forecasts if datetime.fromtimestamp(item["dt"]).date() == target_date]
 
         if not target_forecasts:
-            return _build_weather_error(city, date, f"No weather information found for {date}.")
+            return _build_weather_error(city, date, f"Non ho trovato informazioni meteo per la data {date}.")
 
         avg_temp = sum(item["main"]["temp"] for item in target_forecasts) / len(target_forecasts)
         return {
@@ -171,13 +171,13 @@ def getWeather(city, lang="it", units="metric", date="today"):
         }
     except requests.RequestException as exc:
         logging.error(f"Weather request failed: {exc}")
-        return _build_weather_error(city, date, "Network error while retrieving the weather.")
+        return _build_weather_error(city, date, "Si e verificato un errore di rete durante il recupero del meteo.")
     except (KeyError, ValueError, TypeError) as exc:
         logging.error(f"Weather response parsing failed: {exc}")
-        return _build_weather_error(city, date, "The weather service returned an unexpected response.")
+        return _build_weather_error(city, date, "Il servizio meteo ha restituito una risposta non valida.")
     except Exception as exc:
         logging.error(f"Unexpected weather error: {exc}")
-        return _build_weather_error(city, date, "Unexpected error while retrieving the weather.")
+        return _build_weather_error(city, date, "Si e verificato un errore imprevisto durante il recupero del meteo.")
 
 
 def buildWeatherContext(request, report):
@@ -200,13 +200,13 @@ def buildWeatherMessage(report):
 
     if report["source"] == "current":
         return (
-            f"Today's weather in {report['city']}: {report['description']}, "
-            f"temperature {report['temperature_c']}°C."
+            f"Oggi a {report['city']} il meteo e {report['description']}, "
+            f"con una temperatura di {report['temperature_c']}°C."
         )
 
     return (
-        f"Weather in {report['city']} on {report['date']}: {report['description']}, "
-        f"average temperature {report['temperature_c']}°C."
+        f"A {report['city']} il {report['date']} e previsto {report['description']}, "
+        f"con una temperatura media di {report['temperature_c']}°C."
     )
 
 

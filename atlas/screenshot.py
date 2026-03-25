@@ -17,7 +17,7 @@ def takeScreenshot():
         logging.warning(f"Screenshot not available: {exc}")
     except Exception as exc:
         logging.error(f"Unexpected screenshot error: {exc}")
-    return {"status": "error", "path": None, "message": "I couldn't capture the screenshot."}
+    return {"status": "error", "path": None, "message": "Non sono riuscito a catturare lo screenshot."}
 
 def visionPrompt(prompt, photoPath):
     logging.info("Entering visionPrompt() function...")

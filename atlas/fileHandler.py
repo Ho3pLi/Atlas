@@ -20,7 +20,7 @@ def handleFileSearchPrompt(prompt):
             "status": "error",
             "matches": [],
             "selected_path": None,
-            "message": "I ran into a problem while searching for the file.",
+            "message": "Si e verificato un problema durante la ricerca del file.",
         }
 
     config.session.last_file_search_results.clear()
@@ -60,7 +60,7 @@ def buildFileSearchResponse(matches):
             "status": "not_found",
             "matches": [],
             "selected_path": None,
-            "message": "I'm sorry, I couldn't find any files matching your request.",
+            "message": "Non ho trovato file che corrispondano alla tua richiesta.",
         }
 
     if len(matches) == 1:
@@ -69,13 +69,13 @@ def buildFileSearchResponse(matches):
             "status": "single",
             "matches": matches,
             "selected_path": path,
-            "message": f"I found the requested file: {path}",
+            "message": f"Ho trovato il file richiesto: {path}",
         }
 
-    lines = ["I've found multiple files possibly matching your request:"]
+    lines = ["Ho trovato piu file che potrebbero corrispondere alla tua richiesta:"]
     for idx, file_path in enumerate(matches, start=1):
         lines.append(f"{idx}. {os.path.basename(file_path)}")
-    lines.append("Please specify which one you want by voice.")
+    lines.append("Dimmi quale vuoi aprire specificando il numero o il nome.")
 
     return {
         "status": "multiple",
@@ -147,13 +147,13 @@ def summarizeFile(file_path):
     if isinstance(file_content, str) and file_content.startswith("Error:"):
         return file_content
 
-    file_content = file_content[:2000] if file_content else "No readable content."
-    summary_prompt = f"Summarize the following file content in 2-3 sentences: {file_content}"
+    file_content = file_content[:2000] if file_content else "Nessun contenuto leggibile."
+    summary_prompt = f"Riassumi il seguente contenuto del file in 2-3 frasi in italiano: {file_content}"
     try:
         return atlas.groqPrompt(summary_prompt, None, None, None)
     except Exception as exc:
         logging.error(f"File summarization failed: {exc}")
-        return "I found the file, but I couldn't summarize its contents."
+        return "Ho trovato il file, ma non sono riuscito a riassumerne il contenuto."
 
 
 def extractFileInfo(prompt):
@@ -272,14 +272,14 @@ def openFile(file_path):
 
     if not os.path.exists(file_path):
         logging.error(f"File not found: {file_path}")
-        return "Error: File not found."
+        return "Errore: file non trovato."
 
     try:
         os.startfile(file_path)
-        return "Opening file..."
+        return "Apertura del file in corso..."
     except Exception as exc:
         logging.error(f"Error opening file: {exc}")
-        return "Error: Unable to open the file."
+        return "Errore: impossibile aprire il file."
 
 
 def readFileContent(file_path):
@@ -287,7 +287,7 @@ def readFileContent(file_path):
 
     if not os.path.exists(file_path):
         logging.error(f"File not found: {file_path}")
-        return "Error: File not found."
+        return "Errore: file non trovato."
 
     mime_type, _ = mimetypes.guess_type(file_path)
     logging.info(f"Mime type: {mime_type}")
@@ -298,7 +298,7 @@ def readFileContent(file_path):
                 return file.read()
         except Exception as exc:
             logging.error(f"Error reading file: {exc}")
-            return "Error: Unable to read the file."
+            return "Errore: impossibile leggere il file."
 
     if file_path.endswith(".pdf"):
         try:
@@ -306,10 +306,10 @@ def readFileContent(file_path):
 
             with pdfplumber.open(file_path) as pdf:
                 text = "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
-            return text if text else "No readable text found in the PDF."
+            return text if text else "Nessun testo leggibile trovato nel PDF."
         except Exception as exc:
             logging.error(f"Error reading PDF: {exc}")
-            return "Error: Unable to read the PDF."
+            return "Errore: impossibile leggere il PDF."
 
     if file_path.endswith(".docx"):
         try:
@@ -317,12 +317,12 @@ def readFileContent(file_path):
 
             doc = Document(file_path)
             text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
-            return text if text else "No readable text found in the document."
+            return text if text else "Nessun testo leggibile trovato nel documento."
         except Exception as exc:
             logging.error(f"Error reading DOCX: {exc}")
-            return "Error: Unable to read the document."
+            return "Errore: impossibile leggere il documento."
 
-    return "No readable content."
+    return "Nessun contenuto leggibile."
 
 
 def _extend_unique(destination, seen_paths, new_paths):

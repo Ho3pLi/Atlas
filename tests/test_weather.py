@@ -32,7 +32,7 @@ class WeatherTests(unittest.TestCase):
         result = weather.getWeather("Rome", date="2026-03-25")
 
         self.assertEqual(result["status"], "error")
-        self.assertIn("Unexpected error", result["message"])
+        self.assertIn("errore imprevisto", result["message"])
 
     def test_build_weather_message_for_forecast(self):
         message = weather.buildWeatherMessage(
