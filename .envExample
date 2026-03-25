@@ -1,3 +1,30 @@
-INSERT YOUR API KEY HERE
+# Required for the main assistant chat flow
+GROQ_API_KEY=
 
-EXAMPLEAPIKEY=EXAMPLEAPIVALUE
+# Optional providers and integrations
+GOOGLE_API_KEY=
+OPENAI_API_KEY=
+OPENWEATHER_API_KEY=
+PORCUPINE_API_KEY=
+NARAKEET_API_KEY=
+
+# Optional runtime flags
+DEBUG_MODE=true
+ENABLE_TTS=false
+WHISPER_SIZE=medium
+
+# Optional paths
+ALLOWED_DIRS=
+WAKE_WORD_MODEL=atlas/models/atlas.ppn
+PORCUPINE_MODEL_PATH=atlas/models/porcupine_params_it.pv
+SCREENSHOT_PATH=temp/screenshot.png
+PROMPT_PATH=temp/prompt.wav
+LOG_PATH=logs/atlas.log
+
+# Optional model overrides
+GROQ_MODEL=llama-3.1-8b-instant
+GROQ_MODEL2=llama-3.3-70b-versatile
+
+# Optional conversation memory tuning
+MAX_RECENT_CONVERSATION_MESSAGES=8
+CONVERSATION_SUMMARY_TRIGGER=12

@@ -8,25 +8,60 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _get_env(*names, default=None):
+    for name in names:
+        value = os.getenv(name)
+        if value not in (None, ""):
+            return value
+    return default
+
+
+def _get_bool_env(*names, default=False):
+    value = _get_env(*names)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _get_int_env(*names, default):
+    value = _get_env(*names)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        logging.warning(f"Invalid integer for env var {names[0]}: {value}. Using default {default}.")
+        return default
+
+
+def _get_list_env(*names, default=None):
+    value = _get_env(*names)
+    if value is None:
+        return default or []
+    return [item.strip() for item in value.split(os.pathsep) if item.strip()]
+
+
 @dataclass
 class AppConfig:
-    groq_api_key: str | None = os.getenv("groqApiKey")
-    google_api_key: str | None = os.getenv("googleApiKey")
-    openai_api_key: str | None = os.getenv("openaiApiKey")
-    weather_api_key: str | None = os.getenv("openWeatherApiKey")
-    porcupine_api_key: str | None = os.getenv("porcupineApiKey")
-    narakeet_api_key: str | None = os.getenv("narakeetApiKey")
-    wake_word_model: str = "atlas/models/atlas.ppn"
-    porcupine_model_path: str = "atlas/models/porcupine_params_it.pv"
-    screenshot_path: str = "temp/screenshot.png"
-    prompt_path: str = "temp/prompt.wav"
-    log_path: str = "logs/atlas.log"
-    groq_model: str = "llama-3.1-8b-instant"
-    groq_model2: str = "llama-3.3-70b-versatile"
-    whisper_size: str = "medium"
-    enable_tts: bool = False
-    debug_mode: bool = True
-    allowed_dirs: list[str] = field(default_factory=lambda: [os.path.expanduser("~/Documents/AtlasDir")])
+    groq_api_key: str | None = _get_env("GROQ_API_KEY", "groqApiKey")
+    google_api_key: str | None = _get_env("GOOGLE_API_KEY", "googleApiKey")
+    openai_api_key: str | None = _get_env("OPENAI_API_KEY", "openaiApiKey")
+    weather_api_key: str | None = _get_env("OPENWEATHER_API_KEY", "openWeatherApiKey")
+    porcupine_api_key: str | None = _get_env("PORCUPINE_API_KEY", "porcupineApiKey")
+    narakeet_api_key: str | None = _get_env("NARAKEET_API_KEY", "narakeetApiKey")
+    wake_word_model: str = _get_env("WAKE_WORD_MODEL", default="atlas/models/atlas.ppn")
+    porcupine_model_path: str = _get_env("PORCUPINE_MODEL_PATH", default="atlas/models/porcupine_params_it.pv")
+    screenshot_path: str = _get_env("SCREENSHOT_PATH", default="temp/screenshot.png")
+    prompt_path: str = _get_env("PROMPT_PATH", default="temp/prompt.wav")
+    log_path: str = _get_env("LOG_PATH", default="logs/atlas.log")
+    groq_model: str = _get_env("GROQ_MODEL", default="llama-3.1-8b-instant")
+    groq_model2: str = _get_env("GROQ_MODEL2", default="llama-3.3-70b-versatile")
+    whisper_size: str = _get_env("WHISPER_SIZE", default="medium")
+    enable_tts: bool = _get_bool_env("ENABLE_TTS", default=False)
+    debug_mode: bool = _get_bool_env("DEBUG_MODE", default=True)
+    allowed_dirs: list[str] = field(
+        default_factory=lambda: _get_list_env("ALLOWED_DIRS", default=[os.path.expanduser("~/Documents/AtlasDir")])
+    )
     week_days: list[str] = field(
         default_factory=lambda: ["Lunedi", "Martedi", "Mercoledi", "Giovedi", "Venerdi", "Sabato", "Domenica"]
     )
@@ -43,8 +78,8 @@ class AppConfig:
     generation_config: dict = field(
         default_factory=lambda: {"temperature": 0.7, "top_p": 1, "top_k": 1, "max_output_tokens": 2048}
     )
-    max_recent_conversation_messages: int = 8
-    conversation_summary_trigger: int = 12
+    max_recent_conversation_messages: int = _get_int_env("MAX_RECENT_CONVERSATION_MESSAGES", default=8)
+    conversation_summary_trigger: int = _get_int_env("CONVERSATION_SUMMARY_TRIGGER", default=12)
     safety_settings: list[dict] = field(
         default_factory=lambda: [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
@@ -90,6 +125,48 @@ def ensure_directories():
 def reset_conversation():
     session.conversation = [{"role": "system", "content": app.system_message}]
     session.conversation_summary = None
+
+
+def validate_config():
+    issues = {"errors": [], "warnings": [], "feature_flags": {}}
+
+    if not app.groq_api_key:
+        issues["errors"].append("Missing GROQ_API_KEY. The main assistant chat flow will not work.")
+
+    issues["feature_flags"]["weather_enabled"] = bool(app.weather_api_key)
+    if not app.weather_api_key:
+        issues["warnings"].append("OPENWEATHER_API_KEY not set. Weather requests will fail.")
+
+    issues["feature_flags"]["vision_enabled"] = bool(app.google_api_key)
+    if not app.google_api_key:
+        issues["warnings"].append("GOOGLE_API_KEY not set. Screenshot vision analysis will fail.")
+
+    issues["feature_flags"]["tts_enabled"] = bool(app.enable_tts and app.narakeet_api_key)
+    if app.enable_tts and not app.narakeet_api_key:
+        issues["warnings"].append("ENABLE_TTS is true but NARAKEET_API_KEY is missing. TTS will stay disabled.")
+
+    issues["feature_flags"]["wakeword_enabled"] = bool(app.porcupine_api_key)
+    if not app.debug_mode and not app.porcupine_api_key:
+        issues["warnings"].append("PORCUPINE_API_KEY not set. Wake word mode may fail outside debug mode.")
+
+    for asset_path, label in [
+        (app.wake_word_model, "Wake word model"),
+        (app.porcupine_model_path, "Porcupine model"),
+    ]:
+        if not Path(asset_path).exists():
+            issues["warnings"].append(f"{label} not found at {asset_path}. Related wake word features may fail.")
+
+    if app.conversation_summary_trigger <= app.max_recent_conversation_messages:
+        issues["warnings"].append(
+            "CONVERSATION_SUMMARY_TRIGGER should be greater than MAX_RECENT_CONVERSATION_MESSAGES for useful trimming."
+        )
+
+    for warning in issues["warnings"]:
+        logging.warning(warning)
+    for error in issues["errors"]:
+        logging.error(error)
+
+    return issues
 
 
 def get_groq_client():
