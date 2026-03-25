@@ -11,8 +11,17 @@ import atlas.config as config
 
 def handleFileSearchPrompt(prompt):
     logging.info("Entering handleFileSearchPrompt() function...")
-    matches = searchFiles(prompt)
-    outcome = buildFileSearchResponse(matches)
+    try:
+        matches = searchFiles(prompt)
+        outcome = buildFileSearchResponse(matches)
+    except Exception as exc:
+        logging.error(f"File search failed: {exc}")
+        outcome = {
+            "status": "error",
+            "matches": [],
+            "selected_path": None,
+            "message": "I ran into a problem while searching for the file.",
+        }
 
     config.session.last_file_search_results.clear()
     if outcome["status"] == "multiple":
@@ -135,9 +144,16 @@ def resolveFileChoice(user_choice, file_list):
 
 def summarizeFile(file_path):
     file_content = readFileContent(file_path)
+    if isinstance(file_content, str) and file_content.startswith("Error:"):
+        return file_content
+
     file_content = file_content[:2000] if file_content else "No readable content."
     summary_prompt = f"Summarize the following file content in 2-3 sentences: {file_content}"
-    return atlas.groqPrompt(summary_prompt, None, None, None)
+    try:
+        return atlas.groqPrompt(summary_prompt, None, None, None)
+    except Exception as exc:
+        logging.error(f"File summarization failed: {exc}")
+        return "I found the file, but I couldn't summarize its contents."
 
 
 def extractFileInfo(prompt):
@@ -162,7 +178,11 @@ def extractFileInfo(prompt):
     )
     response = chat_completion.choices[0].message.content
     logging.info(f"Response in extractFileInfo(): {response}")
-    return json.loads(response)
+    try:
+        return json.loads(response)
+    except json.JSONDecodeError as exc:
+        logging.error(f"File info parsing failed: {exc}")
+        return {"filename": prompt.strip(), "extension": "NONE"}
 
 
 def exactSearch(filename, extension, allowed_dirs=None):
@@ -223,7 +243,11 @@ def extractSemanticKeywords(prompt):
 
     response = chat_completion.choices[0].message.content
     logging.info(f"Response in extractSemanticKeywords(): {response}")
-    return json.loads(response)
+    try:
+        return json.loads(response)
+    except json.JSONDecodeError as exc:
+        logging.error(f"Semantic keyword parsing failed: {exc}")
+        return []
 
 
 def semanticSearch(keywords, allowed_dirs=None):

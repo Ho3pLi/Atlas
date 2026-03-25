@@ -1,13 +1,12 @@
 import logging
 import requests
-import pydub
-from pydub.playback import play
 
 import atlas.config as config
 
-def speak(text):    
+def speak(text):
     if not config.app.narakeet_api_key:
-        raise ValueError("API key not found.")
+        logging.warning("TTS skipped: missing Narakeet API key.")
+        return False
 
     url = "https://api.narakeet.com/text-to-speech/m4a?voice=vincenzo"
     headers = {
@@ -16,13 +15,21 @@ def speak(text):
         "x-api-key": config.app.narakeet_api_key,
     }
 
-    response = requests.post(url, headers=headers, data=text.encode("utf-8"))
-    
-    if response.status_code == 200:
+    try:
+        import pydub
+        from pydub.playback import play
+
+        response = requests.post(url, headers=headers, data=text.encode("utf-8"), timeout=30)
+        response.raise_for_status()
+
         with open("temp/debug_output.m4a", "wb") as f:
             f.write(response.content)
         sound = pydub.AudioSegment.from_file("temp/debug_output.m4a", format="m4a")
         play(sound)
         logging.info("Audio successfully played.")
-    else:
-        logging.error(f"Error {response.status_code}: {response.text}")
+        return True
+    except requests.RequestException as exc:
+        logging.error(f"TTS request failed: {exc}")
+    except Exception as exc:
+        logging.error(f"TTS playback failed: {exc}")
+    return False
