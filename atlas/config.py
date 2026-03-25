@@ -43,6 +43,8 @@ class AppConfig:
     generation_config: dict = field(
         default_factory=lambda: {"temperature": 0.7, "top_p": 1, "top_k": 1, "max_output_tokens": 2048}
     )
+    max_recent_conversation_messages: int = 8
+    conversation_summary_trigger: int = 12
     safety_settings: list[dict] = field(
         default_factory=lambda: [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
@@ -56,6 +58,7 @@ class AppConfig:
 @dataclass
 class SessionState:
     conversation: list[dict] = field(default_factory=list)
+    conversation_summary: str | None = None
     last_file_search_results: list[str] = field(default_factory=list)
     current_file_path: str | None = None
     meal_preferences: dict | None = None
@@ -86,6 +89,7 @@ def ensure_directories():
 
 def reset_conversation():
     session.conversation = [{"role": "system", "content": app.system_message}]
+    session.conversation_summary = None
 
 
 def get_groq_client():

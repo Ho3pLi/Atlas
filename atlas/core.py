@@ -41,12 +41,14 @@ def groqPrompt(prompt, imgContext=None, filePath=None, weatherData=None, mealSug
     logging.info(f"[Groq] Sending request - Model: {model} | Prompt: {prompt}")
 
     config.session.conversation.append({"role": "user", "content": prompt})
+    _trim_conversation_if_needed()
     chat_completion = config.get_groq_client().chat.completions.create(
-        messages=config.session.conversation,
+        messages=_build_conversation_messages(),
         model=model,
     )
     response = chat_completion.choices[0].message
     config.session.conversation.append({"role": response.role, "content": response.content})
+    _trim_conversation_if_needed()
 
     logging.info(f"[Groq] Response received: {response.content}")
     return response.content
@@ -167,3 +169,73 @@ def _normalize_confidence(value):
     except (TypeError, ValueError):
         return 0.0
     return max(0.0, min(1.0, round(confidence, 2)))
+
+
+def _build_conversation_messages():
+    messages = [config.session.conversation[0]]
+    if config.session.conversation_summary:
+        messages.append(
+            {
+                "role": "system",
+                "content": f"Conversation summary so far: {config.session.conversation_summary}",
+            }
+        )
+    messages.extend(config.session.conversation[1:])
+    return messages
+
+
+def _trim_conversation_if_needed():
+    non_system_messages = config.session.conversation[1:]
+    trigger = config.app.conversation_summary_trigger
+    keep_count = config.app.max_recent_conversation_messages
+
+    if len(non_system_messages) <= trigger:
+        return
+
+    messages_to_summarize = non_system_messages[:-keep_count]
+    messages_to_keep = non_system_messages[-keep_count:]
+
+    if not messages_to_summarize:
+        return
+
+    summary = _summarize_messages(messages_to_summarize, config.session.conversation_summary)
+    config.session.conversation_summary = summary
+    config.session.conversation = [config.session.conversation[0], *messages_to_keep]
+    logging.info(
+        "Conversation trimmed: summarized %s messages, kept %s recent messages.",
+        len(messages_to_summarize),
+        len(messages_to_keep),
+    )
+
+
+def _summarize_messages(messages, previous_summary=None):
+    formatted_messages = "\n".join(
+        f"{message['role'].upper()}: {message['content']}"
+        for message in messages
+    )
+
+    summary_prompt = (
+        "Summarize the relevant conversation state for future assistant turns. "
+        "Keep user preferences, open tasks, chosen files, meal-planning state, and unresolved follow-ups. "
+        "Omit filler and repeated phrasing. Limit to 120 words.\n\n"
+    )
+
+    if previous_summary:
+        summary_prompt += f"Previous summary:\n{previous_summary}\n\n"
+
+    summary_prompt += f"Messages to compress:\n{formatted_messages}"
+
+    summary_messages = [
+        {
+            "role": "system",
+            "content": "You compress conversation state into a short factual memory for an assistant.",
+        },
+        {"role": "user", "content": summary_prompt},
+    ]
+    chat_completion = config.get_groq_client().chat.completions.create(
+        messages=summary_messages,
+        model=config.app.groq_model,
+    )
+    summary = chat_completion.choices[0].message.content.strip()
+    logging.info(f"Updated conversation summary: {summary}")
+    return summary
