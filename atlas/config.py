@@ -70,6 +70,7 @@ def _default_app_aliases():
         "blocco note": "notepad.exe",
         "notepad": "notepad.exe",
         "discord": "discord.exe",
+        "medal": "medal.exe",
         "steam": "steam.exe",
         "valorant": "RiotClientServices.exe --launch-product=valorant --launch-patchline=live",
         "riot client": "RiotClientServices.exe",

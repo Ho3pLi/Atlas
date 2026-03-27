@@ -8,6 +8,11 @@ from atlas import core
 class CoreRoutingTests(unittest.TestCase):
     def setUp(self):
         config.reset_conversation()
+        self.original_aliases = dict(config.app.app_aliases)
+        config.app.app_aliases = {**self.original_aliases, "medal": "medal.exe"}
+
+    def tearDown(self):
+        config.app.app_aliases = self.original_aliases
 
     def test_heuristic_weather_routing(self):
         intent = core.functionCall("Che meteo fa domani a Roma?")
@@ -25,6 +30,13 @@ class CoreRoutingTests(unittest.TestCase):
 
     def test_heuristic_open_app_routing(self):
         intent = core.functionCall("Avvia Chrome")
+
+        self.assertEqual(intent["action"], "open_app")
+        self.assertEqual(intent["source"], "heuristic")
+        self.assertFalse(intent["needs_clarification"])
+
+    def test_heuristic_open_app_alias_routing(self):
+        intent = core.functionCall("apri medal")
 
         self.assertEqual(intent["action"], "open_app")
         self.assertEqual(intent["source"], "heuristic")

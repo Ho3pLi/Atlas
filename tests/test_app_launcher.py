@@ -12,6 +12,7 @@ class AppLauncherTests(unittest.TestCase):
             "chrome": "chrome.exe",
             "blocco note": "notepad.exe",
             "discord": "discord.exe",
+            "medal": "medal.exe",
             "valorant": "RiotClientServices.exe --launch-product=valorant --launch-patchline=live",
         }
 
@@ -70,6 +71,19 @@ class AppLauncherTests(unittest.TestCase):
         self.assertEqual(
             called_args[0],
             [r"C:\Users\test\AppData\Local\Discord\Update.exe", "--processStart", "Discord.exe"],
+        )
+
+    @patch("atlas.appLauncher._resolve_executable", return_value=r"C:\Users\test\AppData\Local\Medal\Update.exe")
+    @patch("atlas.appLauncher.subprocess.Popen")
+    def test_handle_medal_update_fallback_adds_process_args(self, popen_mock, _resolve_mock):
+        result = appLauncher.handleAppLaunchPrompt("apri medal")
+
+        self.assertEqual(result["status"], "ok")
+        popen_mock.assert_called_once()
+        called_args, _ = popen_mock.call_args
+        self.assertEqual(
+            called_args[0],
+            [r"C:\Users\test\AppData\Local\Medal\Update.exe", "--processStart", "Medal.exe"],
         )
 
 

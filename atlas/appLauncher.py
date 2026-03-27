@@ -131,6 +131,8 @@ def _build_launch_command(app_name, resolved_executable, args):
     # Discord may require Update.exe with process args on some installations.
     if normalized_app == "discord" and Path(resolved_executable).name.lower() == "update.exe" and not args:
         command = [resolved_executable, "--processStart", "Discord.exe"]
+    elif normalized_app == "medal" and Path(resolved_executable).name.lower() == "update.exe" and not args:
+        command = [resolved_executable, "--processStart", "Medal.exe"]
 
     return command
 
@@ -197,6 +199,19 @@ def _candidate_paths(executable_lower):
             app_dirs = sorted(discord_root.glob("app-*"), reverse=True)
             candidates.extend(str(path / "Discord.exe") for path in app_dirs)
         candidates.append(rf"{local_app_data}\Discord\Update.exe")
+    elif executable_lower == "medal.exe":
+        medal_root = Path(local_app_data) / "Medal"
+        if medal_root.exists():
+            app_dirs = sorted(medal_root.glob("app-*"), reverse=True)
+            candidates.extend(str(path / "Medal.exe") for path in app_dirs)
+        candidates.extend(
+            [
+                rf"{local_app_data}\Medal\Medal.exe",
+                rf"{local_app_data}\Medal\Update.exe",
+                rf"{program_files}\Medal\Medal.exe",
+                rf"{program_files_x86}\Medal\Medal.exe",
+            ]
+        )
 
     return [os.path.expandvars(candidate) for candidate in candidates]
 

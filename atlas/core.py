@@ -1,5 +1,7 @@
 import json
 import logging
+import re
+import unicodedata
 
 import atlas.config as config
 
@@ -72,6 +74,10 @@ def functionCall(prompt):
 
 
 def _route_with_heuristics(prompt):
+    open_app_intent = _detect_open_app_intent(prompt)
+    if open_app_intent is not None:
+        return open_app_intent
+
     lowered_prompt = prompt.lower()
     scores = {}
 
@@ -113,6 +119,35 @@ def _route_with_heuristics(prompt):
         "reason": "heuristic_match",
         "source": "heuristic",
     }
+
+
+def _detect_open_app_intent(prompt):
+    lowered_prompt = (prompt or "").strip().lower()
+    if not lowered_prompt:
+        return None
+
+    match = re.search(
+        r"\b(?:apri|avvia|lancia|esegui)\b\s+(?:il|lo|la|l'|un|una)?\s*(?:programma|applicazione|app)?\s*(.+)$",
+        lowered_prompt,
+    )
+    if not match:
+        return None
+
+    requested_app = _normalize_text(_clean_app_name(match.group(1)))
+    if not requested_app:
+        return None
+
+    for alias in config.app.app_aliases.keys():
+        if _normalize_text(alias) == requested_app:
+            return {
+                "action": "open_app",
+                "confidence": 0.92,
+                "needs_clarification": False,
+                "reason": "app_alias_match",
+                "source": "heuristic",
+            }
+
+    return None
 
 
 def _route_with_llm(prompt):
@@ -191,6 +226,19 @@ def _normalize_confidence(value):
     except (TypeError, ValueError):
         return 0.0
     return max(0.0, min(1.0, round(confidence, 2)))
+
+
+def _clean_app_name(value):
+    candidate = re.sub(r"[.!?]+$", "", value).strip()
+    candidate = re.sub(r"\b(per favore|grazie)\b", "", candidate).strip()
+    candidate = re.sub(r"\s+", " ", candidate)
+    return candidate
+
+
+def _normalize_text(value):
+    normalized = unicodedata.normalize("NFKD", value)
+    ascii_value = normalized.encode("ascii", "ignore").decode("ascii")
+    return ascii_value.strip().lower()
 
 
 def _build_conversation_messages():
