@@ -8,6 +8,7 @@ VALID_ACTIONS = {
     "get_weather",
     "take_screenshot",
     "search_file",
+    "open_app",
     "build_meal_plan",
     "change_meal_suggestion",
 }
@@ -17,6 +18,7 @@ HEURISTIC_RULES = [
     ("get_weather", ("meteo", "tempo", "piove", "piovera", "temperature", "temperatura", "weather")),
     ("take_screenshot", ("screenshot", "schermata", "schermo", "screen")),
     ("search_file", ("file", "documento", "pdf", "docx", "cartella", "trova", "cerca")),
+    ("open_app", ("apri programma", "apri app", "avvia", "lancia", "esegui")),
     ("build_meal_plan", ("pasto", "pasti", "meal plan", "menu", "colazione", "pranzo", "cena", "spuntino")),
     ("change_meal_suggestion", ("cambia pasto", "cambia menu", "altra cena", "altro pranzo", "modifica pasto")),
 ]
@@ -117,7 +119,7 @@ def _route_with_llm(prompt):
     sys_msg = (
         "You are an intent router for a voice assistant. "
         "Choose exactly one action for the user's request.\n"
-        "Valid actions: none, get_weather, take_screenshot, search_file, build_meal_plan, change_meal_suggestion.\n"
+        "Valid actions: none, get_weather, take_screenshot, search_file, open_app, build_meal_plan, change_meal_suggestion.\n"
         "Use action=none with needs_clarification=false for small talk/greetings (example reason: small_talk).\n"
         "Use action=none with needs_clarification=true for unknown/unclear requests (example reason: unknown_intent) "
         "and keep confidence <= 0.4 in that case.\n"

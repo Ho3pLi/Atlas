@@ -78,6 +78,9 @@ def process_user_prompt(clean_prompt):
             weather_data = atlas.handleWeatherPrompt(clean_prompt)
             if weather_data["report"]["status"] != "ok":
                 response = weather_data["message"]
+        elif action == "open_app":
+            app_launch_result = atlas.handleAppLaunchPrompt(clean_prompt)
+            response = app_launch_result["message"]
         elif action == "build_meal_plan":
             if atlas.config.session.last_day_planned:
                 meal_suggestion = atlas.buildMealPlan(atlas.config.session.last_day_planned)

@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -41,6 +42,44 @@ def _get_list_env(*names, default=None):
     return [item.strip() for item in value.split(os.pathsep) if item.strip()]
 
 
+def _get_json_dict_env(*names, default=None):
+    value = _get_env(*names)
+    if value is None:
+        return default or {}
+
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        logging.warning("Invalid JSON for env var %s. Using default value.", names[0])
+        return default or {}
+
+    if not isinstance(parsed, dict):
+        logging.warning("Env var %s must be a JSON object. Using default value.", names[0])
+        return default or {}
+
+    normalized = {}
+    for key, app_target in parsed.items():
+        if isinstance(key, str) and isinstance(app_target, str) and key.strip() and app_target.strip():
+            normalized[key.strip()] = app_target.strip()
+
+    return normalized
+
+
+def _default_app_aliases():
+    return {
+        "blocco note": "notepad.exe",
+        "notepad": "notepad.exe",
+        "discord": "discord.exe",
+        "steam": "steam.exe",
+        "valorant": "RiotClientServices.exe --launch-product=valorant --launch-patchline=live",
+        "riot client": "RiotClientServices.exe",
+        "chrome": "chrome.exe",
+        "edge": "msedge.exe",
+        "vscode": "code",
+        "visual studio code": "code",
+    }
+
+
 def _build_system_message(creator_name):
     return (
         "You are a multimodal AI voice assistant. Your name is Atlas. You speak italian. "
@@ -76,6 +115,9 @@ class AppConfig:
     debug_mode: bool = _get_bool_env("DEBUG_MODE", default=True)
     allowed_dirs: list[str] = field(
         default_factory=lambda: _get_list_env("ALLOWED_DIRS", default=[os.path.expanduser("~/Documents/AtlasDir")])
+    )
+    app_aliases: dict[str, str] = field(
+        default_factory=lambda: _get_json_dict_env("APP_ALIASES_JSON", default=_default_app_aliases())
     )
     week_days: list[str] = field(
         default_factory=lambda: ["Lunedi", "Martedi", "Mercoledi", "Giovedi", "Venerdi", "Sabato", "Domenica"]
@@ -154,6 +196,10 @@ def validate_config():
     issues["feature_flags"]["wakeword_enabled"] = bool(app.porcupine_api_key)
     if not app.debug_mode and not app.porcupine_api_key:
         issues["warnings"].append("PORCUPINE_API_KEY not set. Wake word mode may fail outside debug mode.")
+
+    issues["feature_flags"]["app_launcher_enabled"] = bool(app.app_aliases)
+    if not app.app_aliases:
+        issues["warnings"].append("APP_ALIASES_JSON is empty. App launching requests will fail.")
 
     for asset_path, label in [
         (app.wake_word_model, "Wake word model"),

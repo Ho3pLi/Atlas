@@ -23,6 +23,13 @@ class CoreRoutingTests(unittest.TestCase):
         self.assertTrue(intent["needs_clarification"])
         self.assertEqual(intent["reason"], "ambiguous_heuristic_match")
 
+    def test_heuristic_open_app_routing(self):
+        intent = core.functionCall("Avvia Chrome")
+
+        self.assertEqual(intent["action"], "open_app")
+        self.assertEqual(intent["source"], "heuristic")
+        self.assertFalse(intent["needs_clarification"])
+
     def test_validate_intent_downgrades_low_confidence_action(self):
         result = core._validate_intent(
             {

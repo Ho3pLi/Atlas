@@ -52,6 +52,10 @@ def handleWeatherPrompt(*args, **kwargs):
     return _load_attr(".weather", "handleWeatherPrompt")(*args, **kwargs)
 
 
+def handleAppLaunchPrompt(*args, **kwargs):
+    return _load_attr(".appLauncher", "handleAppLaunchPrompt")(*args, **kwargs)
+
+
 def startListening(*args, **kwargs):
     return _load_attr(".wakeword", "startListening")(*args, **kwargs)
 

@@ -16,6 +16,7 @@ ATLAS_CREATOR_NAME=Daniele
 
 # Optional paths
 ALLOWED_DIRS=
+APP_ALIASES_JSON={"blocco note":"notepad.exe","discord":"discord.exe","steam":"steam.exe","valorant":"RiotClientServices.exe --launch-product=valorant --launch-patchline=live","chrome":"chrome.exe","vscode":"code"}
 WAKE_WORD_MODEL=atlas/models/atlas.ppn
 PORCUPINE_MODEL_PATH=atlas/models/porcupine_params_it.pv
 SCREENSHOT_PATH=temp/screenshot.png
