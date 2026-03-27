@@ -1,5 +1,6 @@
 import json
 import logging
+import unicodedata
 from datetime import datetime, timedelta
 
 import requests
@@ -8,30 +9,10 @@ import atlas.config as config
 
 WEEKDAY_MAP = {
     "lunedi": 0,
-    "lunedì": 0,
-    "lunedí": 0,
-    "lunedî": 0,
-    "lunedï": 0,
     "martedi": 1,
-    "martedì": 1,
-    "martedí": 1,
-    "martedî": 1,
-    "martedï": 1,
     "mercoledi": 2,
-    "mercoledì": 2,
-    "mercoledí": 2,
-    "mercoledî": 2,
-    "mercoledï": 2,
     "giovedi": 3,
-    "giovedì": 3,
-    "giovedí": 3,
-    "giovedî": 3,
-    "giovedï": 3,
     "venerdi": 4,
-    "venerdì": 4,
-    "venerdí": 4,
-    "venerdî": 4,
-    "venerdï": 4,
     "sabato": 5,
     "domenica": 6,
 }
@@ -76,7 +57,7 @@ def extractWeatherInfo(prompt):
         logging.info(f"Response in extractWeatherInfo: {response}")
         data = json.loads(response)
 
-        date_str = data["date"].lower()
+        date_str = _normalize_text(data["date"])
         today = datetime.today()
 
         if date_str == "today":
@@ -111,7 +92,7 @@ def extractWeatherInfo(prompt):
 
 def next_weekday(current_date, weekday_name):
     logging.info("Entering next_weekday() function...")
-    weekday = WEEKDAY_MAP[weekday_name.lower()]
+    weekday = WEEKDAY_MAP[_normalize_text(weekday_name)]
     days_ahead = weekday - current_date.weekday()
     if days_ahead <= 0:
         days_ahead += 7
@@ -201,12 +182,12 @@ def buildWeatherMessage(report):
     if report["source"] == "current":
         return (
             f"Oggi a {report['city']} il meteo e {report['description']}, "
-            f"con una temperatura di {report['temperature_c']}°C."
+            f"con una temperatura di {report['temperature_c']} gradi C."
         )
 
     return (
         f"A {report['city']} il {report['date']} e previsto {report['description']}, "
-        f"con una temperatura media di {report['temperature_c']}°C."
+        f"con una temperatura media di {report['temperature_c']} gradi C."
     )
 
 
@@ -223,3 +204,9 @@ def _build_error_result(message):
         "context": buildWeatherContext(request, report),
         "message": message,
     }
+
+
+def _normalize_text(value):
+    normalized = unicodedata.normalize("NFKD", value)
+    ascii_value = normalized.encode("ascii", "ignore").decode("ascii")
+    return ascii_value.strip().lower()
