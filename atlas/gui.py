@@ -23,6 +23,7 @@ def run():
 
     class UiSignals(QObject):
         append_message = pyqtSignal(str)
+        set_status = pyqtSignal(str)
         unlock_input = pyqtSignal()
 
     class AtlasWindow(QMainWindow):
@@ -30,6 +31,7 @@ def run():
             super().__init__()
             self.signals = UiSignals()
             self.signals.append_message.connect(self._append_message)
+            self.signals.set_status.connect(self._set_status)
             self.signals.unlock_input.connect(self._unlock_input)
             self._setup_ui()
 
@@ -46,7 +48,7 @@ def run():
 
             title = QLabel("Atlas")
             title.setStyleSheet("font-size: 24px; font-weight: 600;")
-            subtitle = QLabel("Assistente multimodale - modalità chat")
+            subtitle = QLabel("Assistente multimodale - modalita chat")
             subtitle.setStyleSheet("font-size: 13px; color: #666;")
 
             self.chat_box = QTextEdit()
@@ -61,10 +63,14 @@ def run():
             input_row.addWidget(self.prompt_input)
             input_row.addWidget(self.send_button)
 
+            self.status_label = QLabel("Pronto")
+            self.status_label.setStyleSheet("font-size: 12px; color: #666;")
+
             layout.addWidget(title)
             layout.addWidget(subtitle)
             layout.addWidget(self.chat_box)
             layout.addLayout(input_row)
+            layout.addWidget(self.status_label)
 
             self.send_button.clicked.connect(self._handle_send)
             self.prompt_input.returnPressed.connect(self._handle_send)
@@ -73,6 +79,10 @@ def run():
 
         def _append_message(self, message):
             self.chat_box.append(message)
+
+        @pyqtSlot(str)
+        def _set_status(self, value):
+            self.status_label.setText(value)
 
         def _set_input_enabled(self, enabled):
             self.prompt_input.setEnabled(enabled)
@@ -94,7 +104,7 @@ def run():
 
             self.prompt_input.clear()
             self._append_message(f"Tu: {prompt}")
-            self._append_message("Atlas: sto elaborando...")
+            self._set_status("Atlas: elaborazione in corso...")
             self._lock_input()
 
             worker = threading.Thread(target=self._process_prompt_worker, args=(prompt,), daemon=True)
@@ -111,6 +121,7 @@ def run():
                 response = "Nessuna risposta disponibile."
 
             self.signals.append_message.emit(f"Atlas: {response}")
+            self.signals.set_status.emit("Pronto")
             self.signals.unlock_input.emit()
 
     app = QApplication([])

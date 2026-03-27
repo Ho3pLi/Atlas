@@ -42,6 +42,27 @@ class CoreRoutingTests(unittest.TestCase):
         self.assertEqual(intent["source"], "heuristic")
         self.assertFalse(intent["needs_clarification"])
 
+    def test_heuristic_close_app_alias_routing(self):
+        intent = core.functionCall("chiudi discord")
+
+        self.assertEqual(intent["action"], "close_app")
+        self.assertEqual(intent["source"], "heuristic")
+        self.assertFalse(intent["needs_clarification"])
+
+    def test_heuristic_get_date_routing(self):
+        intent = core.functionCall("Che giorno e oggi?")
+
+        self.assertEqual(intent["action"], "get_date")
+        self.assertEqual(intent["source"], "heuristic")
+        self.assertFalse(intent["needs_clarification"])
+
+    def test_heuristic_capabilities_prompt_as_small_talk(self):
+        intent = core.functionCall("cosa puoi fare")
+
+        self.assertEqual(intent["action"], "none")
+        self.assertFalse(intent["needs_clarification"])
+        self.assertEqual(intent["source"], "heuristic")
+
     def test_validate_intent_downgrades_low_confidence_action(self):
         result = core._validate_intent(
             {

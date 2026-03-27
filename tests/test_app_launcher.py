@@ -23,6 +23,10 @@ class AppLauncherTests(unittest.TestCase):
         app_name = appLauncher.extractAppName("Apri programma Chrome per favore")
         self.assertEqual(app_name, "chrome")
 
+    def test_extract_app_name_for_close_action(self):
+        app_name = appLauncher.extractAppName("chiudi discord", patterns=appLauncher.APP_CLOSE_PATTERNS)
+        self.assertEqual(app_name, "discord")
+
     def test_resolve_app_alias(self):
         target = appLauncher.resolveAppAlias("Blocco Note")
         self.assertEqual(target, "notepad.exe")
@@ -85,6 +89,31 @@ class AppLauncherTests(unittest.TestCase):
             called_args[0],
             [r"C:\Users\test\AppData\Local\Medal\Update.exe", "--processStart", "Medal.exe"],
         )
+
+    @patch("atlas.appLauncher._resolve_executable", return_value=r"C:\Program Files\Google\Chrome\Application\chrome.exe")
+    @patch("atlas.appLauncher.subprocess.run")
+    def test_handle_close_app_prompt_success(self, run_mock, _resolve_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stderr = ""
+        result = appLauncher.handleCloseAppPrompt("chiudi chrome")
+
+        self.assertEqual(result["status"], "ok")
+        run_mock.assert_called_once_with(
+            ["taskkill", "/IM", "chrome.exe", "/T", "/F"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    @patch("atlas.appLauncher._resolve_executable", return_value=r"C:\Program Files\Google\Chrome\Application\chrome.exe")
+    @patch("atlas.appLauncher.subprocess.run")
+    def test_handle_close_app_prompt_failure(self, run_mock, _resolve_mock):
+        run_mock.return_value.returncode = 1
+        run_mock.return_value.stderr = "not running"
+        result = appLauncher.handleCloseAppPrompt("chiudi chrome")
+
+        self.assertEqual(result["status"], "error")
+        self.assertIn("Verifica che sia in esecuzione", result["message"])
 
 
 if __name__ == "__main__":

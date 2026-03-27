@@ -7,20 +7,42 @@ import atlas.config as config
 
 VALID_ACTIONS = {
     "none",
+    "get_date",
     "get_weather",
     "take_screenshot",
     "search_file",
     "open_app",
+    "close_app",
     "build_meal_plan",
     "change_meal_suggestion",
 }
 
 HEURISTIC_RULES = [
-    ("none", ("ciao", "salve", "buongiorno", "buonasera", "come va", "come stai", "hey", "hi", "hello")),
+    (
+        "none",
+        (
+            "ciao",
+            "salve",
+            "buongiorno",
+            "buonasera",
+            "come va",
+            "come stai",
+            "hey",
+            "hi",
+            "hello",
+            "chi sei",
+            "cosa sai fare",
+            "cosa puoi fare",
+            "dimmi qualcosa su di te",
+            "parlami di te",
+        ),
+    ),
+    ("get_date", ("che giorno", "che data", "data di oggi", "giorno di oggi", "oggi che giorno", "oggi che data")),
     ("get_weather", ("meteo", "tempo", "piove", "piovera", "temperature", "temperatura", "weather")),
     ("take_screenshot", ("screenshot", "schermata", "schermo", "screen")),
     ("search_file", ("file", "documento", "pdf", "docx", "cartella", "trova", "cerca")),
     ("open_app", ("apri programma", "apri app", "avvia", "lancia", "esegui")),
+    ("close_app", ("chiudi", "termina", "stoppa")),
     ("build_meal_plan", ("pasto", "pasti", "meal plan", "menu", "colazione", "pranzo", "cena", "spuntino")),
     ("change_meal_suggestion", ("cambia pasto", "cambia menu", "altra cena", "altro pranzo", "modifica pasto")),
 ]
@@ -74,9 +96,17 @@ def functionCall(prompt):
 
 
 def _route_with_heuristics(prompt):
+    date_intent = _detect_date_intent(prompt)
+    if date_intent is not None:
+        return date_intent
+
     open_app_intent = _detect_open_app_intent(prompt)
     if open_app_intent is not None:
         return open_app_intent
+
+    close_app_intent = _detect_close_app_intent(prompt)
+    if close_app_intent is not None:
+        return close_app_intent
 
     lowered_prompt = prompt.lower()
     scores = {}
@@ -150,11 +180,64 @@ def _detect_open_app_intent(prompt):
     return None
 
 
+def _detect_close_app_intent(prompt):
+    lowered_prompt = (prompt or "").strip().lower()
+    if not lowered_prompt:
+        return None
+
+    match = re.search(
+        r"\b(?:chiudi|termina|stoppa)\b\s+(?:il|lo|la|l'|un|una)?\s*(?:programma|applicazione|app)?\s*(.+)$",
+        lowered_prompt,
+    )
+    if not match:
+        return None
+
+    requested_app = _normalize_text(_clean_app_name(match.group(1)))
+    if not requested_app:
+        return None
+
+    for alias in config.app.app_aliases.keys():
+        if _normalize_text(alias) == requested_app:
+            return {
+                "action": "close_app",
+                "confidence": 0.92,
+                "needs_clarification": False,
+                "reason": "app_alias_match",
+                "source": "heuristic",
+            }
+
+    return None
+
+
+def _detect_date_intent(prompt):
+    lowered_prompt = _normalize_text(prompt or "")
+    if not lowered_prompt:
+        return None
+
+    date_patterns = (
+        r"\bche giorno (?:e|e') oggi\b",
+        r"\boggi che giorno (?:e|e')\b",
+        r"\bche data (?:e|e') oggi\b",
+        r"\boggi che data (?:e|e')\b",
+        r"\bmi dici la data\b",
+    )
+    if any(re.search(pattern, lowered_prompt) for pattern in date_patterns):
+        return {
+            "action": "get_date",
+            "confidence": 0.95,
+            "needs_clarification": False,
+            "reason": "date_request",
+            "source": "heuristic",
+        }
+
+    return None
+
+
 def _route_with_llm(prompt):
     sys_msg = (
         "You are an intent router for a voice assistant. "
         "Choose exactly one action for the user's request.\n"
-        "Valid actions: none, get_weather, take_screenshot, search_file, open_app, build_meal_plan, change_meal_suggestion.\n"
+        "Valid actions: none, get_date, get_weather, take_screenshot, search_file, open_app, close_app, build_meal_plan, change_meal_suggestion.\n"
         "Use action=none with needs_clarification=false for small talk/greetings (example reason: small_talk).\n"
         "Use action=none with needs_clarification=true for unknown/unclear requests (example reason: unknown_intent) "
         "and keep confidence <= 0.4 in that case.\n"

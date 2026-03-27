@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 import atlas
 
@@ -71,6 +72,8 @@ def process_user_prompt(clean_prompt):
                 visual_context = atlas.visionPrompt(clean_prompt, screenshot_result["path"])
             else:
                 response = screenshot_result["message"]
+        elif action == "get_date":
+            response = _build_today_message()
         elif action == "search_file":
             search_outcome = atlas.handleFileSearchPrompt(clean_prompt)
             response = search_outcome["message"]
@@ -81,6 +84,9 @@ def process_user_prompt(clean_prompt):
         elif action == "open_app":
             app_launch_result = atlas.handleAppLaunchPrompt(clean_prompt)
             response = app_launch_result["message"]
+        elif action == "close_app":
+            app_close_result = atlas.handleCloseAppPrompt(clean_prompt)
+            response = app_close_result["message"]
         elif action == "build_meal_plan":
             if atlas.config.session.last_day_planned:
                 meal_suggestion = atlas.buildMealPlan(atlas.config.session.last_day_planned)
@@ -130,3 +136,10 @@ def _handle_file_selection(clean_prompt):
 def _speak_if_enabled(response):
     if atlas.config.app.enable_tts and response:
         atlas.speak(response)
+
+
+def _build_today_message():
+    today = datetime.now()
+    weekdays = ["lunedi", "martedi", "mercoledi", "giovedi", "venerdi", "sabato", "domenica"]
+    weekday = weekdays[today.weekday()]
+    return f"Oggi e {weekday}, {today.strftime('%Y-%m-%d')}."
