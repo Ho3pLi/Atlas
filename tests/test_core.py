@@ -56,10 +56,18 @@ class CoreRoutingTests(unittest.TestCase):
         self.assertEqual(intent["source"], "heuristic")
         self.assertFalse(intent["needs_clarification"])
 
+    def test_heuristic_get_time_routing(self):
+        intent = core.functionCall("che ora e")
+
+        self.assertEqual(intent["action"], "get_time")
+        self.assertEqual(intent["source"], "heuristic")
+        self.assertFalse(intent["needs_clarification"])
+
     def test_heuristic_capabilities_prompt_as_small_talk(self):
         intent = core.functionCall("cosa puoi fare")
 
         self.assertEqual(intent["action"], "none")
+        self.assertEqual(intent["reason"], "capabilities_query")
         self.assertFalse(intent["needs_clarification"])
         self.assertEqual(intent["source"], "heuristic")
 

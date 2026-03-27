@@ -60,6 +60,10 @@ def handleCloseAppPrompt(*args, **kwargs):
     return _load_attr(".appLauncher", "handleCloseAppPrompt")(*args, **kwargs)
 
 
+def listConfiguredApps(*args, **kwargs):
+    return _load_attr(".appLauncher", "listConfiguredApps")(*args, **kwargs)
+
+
 def startListening(*args, **kwargs):
     return _load_attr(".wakeword", "startListening")(*args, **kwargs)
 

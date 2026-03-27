@@ -8,6 +8,7 @@ import atlas.config as config
 VALID_ACTIONS = {
     "none",
     "get_date",
+    "get_time",
     "get_weather",
     "take_screenshot",
     "search_file",
@@ -96,9 +97,17 @@ def functionCall(prompt):
 
 
 def _route_with_heuristics(prompt):
+    capabilities_intent = _detect_capabilities_intent(prompt)
+    if capabilities_intent is not None:
+        return capabilities_intent
+
     date_intent = _detect_date_intent(prompt)
     if date_intent is not None:
         return date_intent
+
+    time_intent = _detect_time_intent(prompt)
+    if time_intent is not None:
+        return time_intent
 
     open_app_intent = _detect_open_app_intent(prompt)
     if open_app_intent is not None:
@@ -233,11 +242,59 @@ def _detect_date_intent(prompt):
     return None
 
 
+def _detect_time_intent(prompt):
+    lowered_prompt = _normalize_text(prompt or "")
+    if not lowered_prompt:
+        return None
+
+    time_patterns = (
+        r"\bche ora (?:e|e')\b",
+        r"\bche ore sono\b",
+        r"\bmi dici l[']?ora\b",
+        r"\bora esatta\b",
+    )
+    if any(re.search(pattern, lowered_prompt) for pattern in time_patterns):
+        return {
+            "action": "get_time",
+            "confidence": 0.95,
+            "needs_clarification": False,
+            "reason": "time_request",
+            "source": "heuristic",
+        }
+
+    return None
+
+
+def _detect_capabilities_intent(prompt):
+    lowered_prompt = _normalize_text(prompt or "")
+    if not lowered_prompt:
+        return None
+
+    patterns = (
+        r"\bcosa puoi fare\b",
+        r"\bcosa sai fare\b",
+        r"\bpuoi (?:chiudere|aprire) applicazioni\b",
+        r"\bpuoi chiudere programmi\b",
+        r"\bpuoi aprire programmi\b",
+        r"\bquali funzioni hai\b",
+    )
+    if any(re.search(pattern, lowered_prompt) for pattern in patterns):
+        return {
+            "action": "none",
+            "confidence": 0.9,
+            "needs_clarification": False,
+            "reason": "capabilities_query",
+            "source": "heuristic",
+        }
+
+    return None
+
+
 def _route_with_llm(prompt):
     sys_msg = (
         "You are an intent router for a voice assistant. "
         "Choose exactly one action for the user's request.\n"
-        "Valid actions: none, get_date, get_weather, take_screenshot, search_file, open_app, close_app, build_meal_plan, change_meal_suggestion.\n"
+        "Valid actions: none, get_date, get_time, get_weather, take_screenshot, search_file, open_app, close_app, build_meal_plan, change_meal_suggestion.\n"
         "Use action=none with needs_clarification=false for small talk/greetings (example reason: small_talk).\n"
         "Use action=none with needs_clarification=true for unknown/unclear requests (example reason: unknown_intent) "
         "and keep confidence <= 0.4 in that case.\n"

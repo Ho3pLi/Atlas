@@ -101,6 +101,10 @@ def resolveAppAlias(app_name):
     return None
 
 
+def listConfiguredApps():
+    return sorted(config.app.app_aliases.keys())
+
+
 def launchApplication(app_name, target):
     try:
         command = shlex.split(target, posix=False)

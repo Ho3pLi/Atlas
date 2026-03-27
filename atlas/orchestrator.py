@@ -65,6 +65,10 @@ def process_user_prompt(clean_prompt):
             response = "Non ho capito con sufficiente certezza cosa vuoi fare. Riformula la richiesta in modo piu specifico."
             _speak_if_enabled(response)
             return response
+        if action == "none" and intent.get("reason") == "capabilities_query":
+            response = _build_capabilities_message()
+            _speak_if_enabled(response)
+            return response
 
         if action == "take_screenshot":
             screenshot_result = atlas.takeScreenshot()
@@ -74,6 +78,8 @@ def process_user_prompt(clean_prompt):
                 response = screenshot_result["message"]
         elif action == "get_date":
             response = _build_today_message()
+        elif action == "get_time":
+            response = _build_time_message()
         elif action == "search_file":
             search_outcome = atlas.handleFileSearchPrompt(clean_prompt)
             response = search_outcome["message"]
@@ -143,3 +149,18 @@ def _build_today_message():
     weekdays = ["lunedi", "martedi", "mercoledi", "giovedi", "venerdi", "sabato", "domenica"]
     weekday = weekdays[today.weekday()]
     return f"Oggi e {weekday}, {today.strftime('%Y-%m-%d')}."
+
+
+def _build_time_message():
+    now = datetime.now()
+    return f"Sono le {now.strftime('%H:%M')} del {now.strftime('%Y-%m-%d')}."
+
+
+def _build_capabilities_message():
+    available_apps = atlas.listConfiguredApps()
+    listed_apps = ", ".join(available_apps[:8]) if available_apps else "nessuna app configurata"
+    return (
+        "Posso aiutarti con conversazione generale, meteo, ricerca file, screenshot, data/ora, meal plan, "
+        "e anche aprire o chiudere applicazioni configurate. "
+        f"Al momento ho questi alias app: {listed_apps}."
+    )
