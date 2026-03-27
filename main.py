@@ -1,4 +1,5 @@
 import logging
+import sys
 
 import atlas
 
@@ -20,4 +21,7 @@ def configure_logging():
 if __name__ == "__main__":
     configure_logging()
     atlas.config.validate_config()
-    atlas.run()
+    if "--gui" in sys.argv:
+        atlas.run_gui()
+    else:
+        atlas.run()

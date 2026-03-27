@@ -95,6 +95,12 @@ Per default il progetto gira in debug mode se `DEBUG_MODE=true`, quindi puoi int
 
 By default the project runs in debug mode if `DEBUG_MODE=true`, so you can interact through the terminal without starting the wake word loop.
 
+PyQt GUI mode:
+
+```bash
+python main.py --gui
+```
+
 ---
 
 ## Environment Variables

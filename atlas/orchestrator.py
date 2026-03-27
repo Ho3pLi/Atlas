@@ -43,7 +43,7 @@ def process_user_prompt(clean_prompt):
         handled, response = _handle_file_selection(clean_prompt)
         if handled:
             _speak_if_enabled(response)
-            return
+            return response
 
         intent = atlas.functionCall(clean_prompt)
         action = intent["action"]
@@ -63,7 +63,7 @@ def process_user_prompt(clean_prompt):
         if intent["needs_clarification"]:
             response = "Non ho capito con sufficiente certezza cosa vuoi fare. Riformula la richiesta in modo piu specifico."
             _speak_if_enabled(response)
-            return
+            return response
 
         if action == "take_screenshot":
             screenshot_result = atlas.takeScreenshot()
@@ -91,9 +91,12 @@ def process_user_prompt(clean_prompt):
             response = atlas.groqPrompt(clean_prompt, visual_context, None, weather_data, meal_suggestion)
 
         _speak_if_enabled(response)
+        return response
     except Exception as exc:
         logging.exception(f"Prompt processing failed: {exc}")
-        _speak_if_enabled("Si e verificato un errore durante l'elaborazione della richiesta.")
+        response = "Si e verificato un errore durante l'elaborazione della richiesta."
+        _speak_if_enabled(response)
+        return response
 
 
 def run():

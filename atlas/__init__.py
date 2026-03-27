@@ -94,3 +94,7 @@ def process_user_prompt(*args, **kwargs):
 
 def run(*args, **kwargs):
     return _load_attr(".orchestrator", "run")(*args, **kwargs)
+
+
+def run_gui(*args, **kwargs):
+    return _load_attr(".gui", "run")(*args, **kwargs)
