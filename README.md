@@ -129,6 +129,8 @@ Flag runtime:
   `true` abilita l'output vocale se `NARAKEET_API_KEY` e presente.
 - `WHISPER_SIZE`
   Controlla la dimensione del modello Faster Whisper.
+- `ATLAS_CREATOR_NAME`
+  Nome del creatore da usare quando Atlas risponde a domande su chi l'ha creato.
 
 Path opzionali:
 
@@ -182,6 +184,8 @@ Runtime flags:
   `true` enables speech output if `NARAKEET_API_KEY` is also set.
 - `WHISPER_SIZE`
   Controls the Faster Whisper model size.
+- `ATLAS_CREATOR_NAME`
+  Creator name Atlas should mention when asked who created it.
 
 Optional paths:
 

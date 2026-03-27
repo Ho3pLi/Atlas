@@ -13,6 +13,7 @@ VALID_ACTIONS = {
 }
 
 HEURISTIC_RULES = [
+    ("none", ("ciao", "salve", "buongiorno", "buonasera", "come va", "come stai", "hey", "hi", "hello")),
     ("get_weather", ("meteo", "tempo", "piove", "piovera", "temperature", "temperatura", "weather")),
     ("take_screenshot", ("screenshot", "schermata", "schermo", "screen")),
     ("search_file", ("file", "documento", "pdf", "docx", "cartella", "trova", "cerca")),
@@ -93,6 +94,15 @@ def _route_with_heuristics(prompt):
             "source": "heuristic",
         }
 
+    if best_action == "none":
+        return {
+            "action": "none",
+            "confidence": 0.75,
+            "needs_clarification": False,
+            "reason": "small_talk",
+            "source": "heuristic",
+        }
+
     confidence = min(0.95, 0.6 + 0.1 * best_score)
     return {
         "action": best_action,
@@ -108,6 +118,9 @@ def _route_with_llm(prompt):
         "You are an intent router for a voice assistant. "
         "Choose exactly one action for the user's request.\n"
         "Valid actions: none, get_weather, take_screenshot, search_file, build_meal_plan, change_meal_suggestion.\n"
+        "Use action=none with needs_clarification=false for small talk/greetings (example reason: small_talk).\n"
+        "Use action=none with needs_clarification=true for unknown/unclear requests (example reason: unknown_intent) "
+        "and keep confidence <= 0.4 in that case.\n"
         "Return ONLY valid JSON in this format: "
         '{"action":"one_of_the_valid_actions","confidence":0.0,"needs_clarification":false,"reason":"short_reason"}\n'
         "confidence must be a number between 0 and 1."
@@ -146,6 +159,7 @@ def _validate_intent(intent):
     confidence = _normalize_confidence(intent.get("confidence", 0.0))
     needs_clarification = bool(intent.get("needs_clarification", False))
     reason = str(intent.get("reason", ""))
+    normalized_reason = reason.strip().lower().replace(" ", "_")
     source = intent.get("source", "unknown")
 
     if confidence < LOW_CONFIDENCE_THRESHOLD and action != "none":
@@ -153,6 +167,12 @@ def _validate_intent(intent):
 
     if needs_clarification and action != "none" and confidence < LOW_CONFIDENCE_THRESHOLD:
         action = "none"
+
+    if action == "none":
+        fallback_reasons = {"unknown_intent", "no_specific_request", "unclear_request", "fallback", "invalid_json"}
+        if needs_clarification or normalized_reason in fallback_reasons:
+            confidence = min(confidence, 0.4)
+            needs_clarification = True
 
     return {
         "action": action,

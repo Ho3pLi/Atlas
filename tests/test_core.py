@@ -37,6 +37,29 @@ class CoreRoutingTests(unittest.TestCase):
         self.assertEqual(result["action"], "none")
         self.assertTrue(result["needs_clarification"])
 
+    def test_heuristic_small_talk_does_not_require_clarification(self):
+        intent = core.functionCall("Ciao, come va?")
+
+        self.assertEqual(intent["action"], "none")
+        self.assertEqual(intent["reason"], "small_talk")
+        self.assertFalse(intent["needs_clarification"])
+        self.assertEqual(intent["source"], "heuristic")
+
+    def test_validate_intent_caps_none_confidence_for_unknown_intent(self):
+        result = core._validate_intent(
+            {
+                "action": "none",
+                "confidence": 1.0,
+                "needs_clarification": True,
+                "reason": "unknown intent",
+                "source": "llm",
+            }
+        )
+
+        self.assertEqual(result["action"], "none")
+        self.assertTrue(result["needs_clarification"])
+        self.assertLessEqual(result["confidence"], 0.4)
+
     @patch("atlas.core._summarize_messages", return_value="summary memory")
     def test_conversation_trim_keeps_recent_messages_and_summary(self, summarize_mock):
         config.app.max_recent_conversation_messages = 2

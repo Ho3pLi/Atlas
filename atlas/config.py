@@ -41,6 +41,20 @@ def _get_list_env(*names, default=None):
     return [item.strip() for item in value.split(os.pathsep) if item.strip()]
 
 
+def _build_system_message(creator_name):
+    return (
+        "You are a multimodal AI voice assistant. Your name is Atlas. You speak italian. "
+        f"You were created by {creator_name}. If the user asks who created you, answer with that name clearly. "
+        "Your user may or may not have attached a photo for context "
+        "(either a screenshot or a webcam capture). Any photo has already been processed into a highly detailed "
+        "text prompt that will be attached to their transcribed voice prompt. Generate the most useful and "
+        "factual response possible, carefully considering all previous generated text in your response before "
+        "adding new tokens to the response. Do not expect or request images, just use the context if added. "
+        "Use all of the context of this conversation so your response is relevant to the conversation. Make "
+        "your responses clear and concise, avoiding any verbosity."
+    )
+
+
 @dataclass
 class AppConfig:
     groq_api_key: str | None = _get_env("GROQ_API_KEY", "groqApiKey")
@@ -54,6 +68,7 @@ class AppConfig:
     screenshot_path: str = _get_env("SCREENSHOT_PATH", default="temp/screenshot.png")
     prompt_path: str = _get_env("PROMPT_PATH", default="temp/prompt.wav")
     log_path: str = _get_env("LOG_PATH", default="logs/atlas.log")
+    atlas_creator_name: str = _get_env("ATLAS_CREATOR_NAME", "atlasCreatorName", default="Daniele")
     groq_model: str = _get_env("GROQ_MODEL", default="llama-3.1-8b-instant")
     groq_model2: str = _get_env("GROQ_MODEL2", default="llama-3.3-70b-versatile")
     whisper_size: str = _get_env("WHISPER_SIZE", default="medium")
@@ -65,16 +80,7 @@ class AppConfig:
     week_days: list[str] = field(
         default_factory=lambda: ["Lunedi", "Martedi", "Mercoledi", "Giovedi", "Venerdi", "Sabato", "Domenica"]
     )
-    system_message: str = (
-        "You are a multimodal AI voice assistant. Your name is Atlas. You speak italian. "
-        "Your user may or may not have attached a photo for context "
-        "(either a screenshot or a webcam capture). Any photo has already been processed into a highly detailed "
-        "text prompt that will be attached to their transcribed voice prompt. Generate the most useful and "
-        "factual response possible, carefully considering all previous generated text in your response before "
-        "adding new tokens to the response. Do not expect or request images, just use the context if added. "
-        "Use all of the context of this conversation so your response is relevant to the conversation. Make "
-        "your responses clear and concise, avoiding any verbosity."
-    )
+    system_message: str = _build_system_message(_get_env("ATLAS_CREATOR_NAME", "atlasCreatorName", default="Daniele"))
     generation_config: dict = field(
         default_factory=lambda: {"temperature": 0.7, "top_p": 1, "top_k": 1, "max_output_tokens": 2048}
     )
