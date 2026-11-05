@@ -53,7 +53,7 @@ Main features:
 
 **Italiano**
 
-- Python 3.10+
+- Python 3.11+ (installazione e test verificati con Python 3.12 su Windows)
 - `pip install -r requirements.txt`
 - una `GROQ_API_KEY` valida per il flusso principale dell'assistente
 
@@ -65,7 +65,7 @@ Alcune integrazioni richiedono anche dipendenze native locali:
 
 **English**
 
-- Python 3.10+
+- Python 3.11+ (installation and tests verified with Python 3.12 on Windows)
 - `pip install -r requirements.txt`
 - a valid `GROQ_API_KEY` for the main assistant flow
 
