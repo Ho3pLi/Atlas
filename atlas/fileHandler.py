@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import difflib
 import json
 import logging
@@ -7,6 +8,12 @@ import re
 
 import atlas
 import atlas.config as config
+
+
+@dataclass(frozen=True)
+class _FileReadResult:
+    content: str | None = None
+    message: str = "Nessun contenuto leggibile."
 
 
 def handleFileSearchPrompt(prompt):
@@ -143,11 +150,11 @@ def resolveFileChoice(user_choice, file_list):
 
 
 def summarizeFile(file_path):
-    file_content = readFileContent(file_path)
-    if isinstance(file_content, str) and file_content.startswith("Error:"):
-        return file_content
+    result = _read_file_content(file_path)
+    if result.content is None or not result.content.strip():
+        return result.message
 
-    file_content = file_content[:2000] if file_content else "Nessun contenuto leggibile."
+    file_content = result.content[:2000]
     summary_prompt = f"Riassumi il seguente contenuto del file in 2-3 frasi in italiano: {file_content}"
     try:
         return atlas.groqPrompt(summary_prompt, None, None, None)
@@ -283,11 +290,18 @@ def openFile(file_path):
 
 
 def readFileContent(file_path):
+    """Return file text or the existing user-facing status message."""
+    result = _read_file_content(file_path)
+    return result.content if result.content is not None else result.message
+
+
+def _read_file_content(file_path):
+    """Keep readable content separate from errors and empty/unsupported results."""
     logging.info("Entering readFileContent() function...")
 
     if not os.path.exists(file_path):
         logging.error(f"File not found: {file_path}")
-        return "Errore: file non trovato."
+        return _FileReadResult(message="Errore: file non trovato.")
 
     mime_type, _ = mimetypes.guess_type(file_path)
     logging.info(f"Mime type: {mime_type}")
@@ -295,21 +309,23 @@ def readFileContent(file_path):
     if mime_type and mime_type.startswith("text"):
         try:
             with open(file_path, "r", encoding="utf-8") as file:
-                return file.read()
+                return _FileReadResult(content=file.read())
         except Exception as exc:
             logging.error(f"Error reading file: {exc}")
-            return "Errore: impossibile leggere il file."
+            return _FileReadResult(message="Errore: impossibile leggere il file.")
 
     if file_path.endswith(".pdf"):
         try:
             import pdfplumber
 
             with pdfplumber.open(file_path) as pdf:
-                text = "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
-            return text if text else "Nessun testo leggibile trovato nel PDF."
+                text = "\n".join(text for page in pdf.pages if (text := page.extract_text()))
+            if text.strip():
+                return _FileReadResult(content=text)
+            return _FileReadResult(message="Nessun testo leggibile trovato nel PDF.")
         except Exception as exc:
             logging.error(f"Error reading PDF: {exc}")
-            return "Errore: impossibile leggere il PDF."
+            return _FileReadResult(message="Errore: impossibile leggere il PDF.")
 
     if file_path.endswith(".docx"):
         try:
@@ -317,12 +333,14 @@ def readFileContent(file_path):
 
             doc = Document(file_path)
             text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
-            return text if text else "Nessun testo leggibile trovato nel documento."
+            if text.strip():
+                return _FileReadResult(content=text)
+            return _FileReadResult(message="Nessun testo leggibile trovato nel documento.")
         except Exception as exc:
             logging.error(f"Error reading DOCX: {exc}")
-            return "Errore: impossibile leggere il documento."
+            return _FileReadResult(message="Errore: impossibile leggere il documento.")
 
-    return "Nessun contenuto leggibile."
+    return _FileReadResult()
 
 
 def _extend_unique(destination, seen_paths, new_paths):
