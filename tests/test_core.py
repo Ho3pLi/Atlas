@@ -8,11 +8,15 @@ from atlas import core
 class CoreRoutingTests(unittest.TestCase):
     def setUp(self):
         config.reset_conversation()
+        self.original_recent = config.app.max_recent_conversation_messages
+        self.original_trigger = config.app.conversation_summary_trigger
         self.original_aliases = dict(config.app.app_aliases)
         config.app.app_aliases = {**self.original_aliases, "medal": "medal.exe"}
 
     def tearDown(self):
         config.app.app_aliases = self.original_aliases
+        config.app.max_recent_conversation_messages = self.original_recent
+        config.app.conversation_summary_trigger = self.original_trigger
 
     def test_heuristic_weather_routing(self):
         intent = core.functionCall("Che meteo fa domani a Roma?")

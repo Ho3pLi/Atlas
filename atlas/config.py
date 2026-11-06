@@ -31,7 +31,9 @@ def _get_int_env(*names, default):
     try:
         return int(value)
     except ValueError:
-        logging.warning(f"Invalid integer for env var {names[0]}: {value}. Using default {default}.")
+        logging.warning(
+            f"Invalid integer for env var {names[0]}: {value}. Using default {default}."
+        )
         return default
 
 
@@ -54,13 +56,23 @@ def _get_json_dict_env(*names, default=None):
         return default or {}
 
     if not isinstance(parsed, dict):
-        logging.warning("Env var %s must be a JSON object. Using default value.", names[0])
+        logging.warning(
+            "Env var %s must be a JSON object. Using default value.", names[0]
+        )
         return default or {}
 
     normalized = {}
     for key, app_target in parsed.items():
-        if isinstance(key, str) and isinstance(app_target, str) and key.strip() and app_target.strip():
+        if not isinstance(key, str) or not key.strip():
+            continue
+        if isinstance(app_target, str) and app_target.strip():
             normalized[key.strip()] = app_target.strip()
+        elif (
+            isinstance(app_target, list)
+            and app_target
+            and all(isinstance(arg, str) and arg for arg in app_target)
+        ):
+            normalized[key.strip()] = app_target
 
     return normalized
 
@@ -104,31 +116,61 @@ class AppConfig:
     porcupine_api_key: str | None = _get_env("PORCUPINE_API_KEY", "porcupineApiKey")
     narakeet_api_key: str | None = _get_env("NARAKEET_API_KEY", "narakeetApiKey")
     wake_word_model: str = _get_env("WAKE_WORD_MODEL", default="atlas/models/atlas.ppn")
-    porcupine_model_path: str = _get_env("PORCUPINE_MODEL_PATH", default="atlas/models/porcupine_params_it.pv")
+    porcupine_model_path: str = _get_env(
+        "PORCUPINE_MODEL_PATH", default="atlas/models/porcupine_params_it.pv"
+    )
     screenshot_path: str = _get_env("SCREENSHOT_PATH", default="temp/screenshot.png")
     prompt_path: str = _get_env("PROMPT_PATH", default="temp/prompt.wav")
     log_path: str = _get_env("LOG_PATH", default="logs/atlas.log")
-    atlas_creator_name: str = _get_env("ATLAS_CREATOR_NAME", "atlasCreatorName", default="Daniele")
-    groq_model: str = _get_env("GROQ_MODEL", default="llama-3.1-8b-instant")
-    groq_model2: str = _get_env("GROQ_MODEL2", default="llama-3.3-70b-versatile")
+    atlas_creator_name: str = _get_env(
+        "ATLAS_CREATOR_NAME", "atlasCreatorName", default="Daniele"
+    )
+    groq_model: str = _get_env("GROQ_MODEL", default="openai/gpt-oss-20b")
+    groq_model2: str = _get_env("GROQ_MODEL2", default="openai/gpt-oss-120b")
+    gemini_model: str = _get_env("GEMINI_MODEL", default="gemini-3.8-flash")
+    listen_timeout: int = max(1, _get_int_env("LISTEN_TIMEOUT", default=10))
+    phrase_time_limit: int = max(1, _get_int_env("PHRASE_TIME_LIMIT", default=30))
     whisper_size: str = _get_env("WHISPER_SIZE", default="medium")
     enable_tts: bool = _get_bool_env("ENABLE_TTS", default=False)
     debug_mode: bool = _get_bool_env("DEBUG_MODE", default=True)
     allowed_dirs: list[str] = field(
-        default_factory=lambda: _get_list_env("ALLOWED_DIRS", default=[os.path.expanduser("~/Documents/AtlasDir")])
+        default_factory=lambda: _get_list_env(
+            "ALLOWED_DIRS", default=[os.path.expanduser("~/Documents/AtlasDir")]
+        )
     )
-    app_aliases: dict[str, str] = field(
-        default_factory=lambda: _get_json_dict_env("APP_ALIASES_JSON", default=_default_app_aliases())
+    app_aliases: dict[str, str | list[str]] = field(
+        default_factory=lambda: _get_json_dict_env(
+            "APP_ALIASES_JSON", default=_default_app_aliases()
+        )
     )
     week_days: list[str] = field(
-        default_factory=lambda: ["Lunedi", "Martedi", "Mercoledi", "Giovedi", "Venerdi", "Sabato", "Domenica"]
+        default_factory=lambda: [
+            "Lunedi",
+            "Martedi",
+            "Mercoledi",
+            "Giovedi",
+            "Venerdi",
+            "Sabato",
+            "Domenica",
+        ]
     )
-    system_message: str = _build_system_message(_get_env("ATLAS_CREATOR_NAME", "atlasCreatorName", default="Daniele"))
+    system_message: str = _build_system_message(
+        _get_env("ATLAS_CREATOR_NAME", "atlasCreatorName", default="Daniele")
+    )
     generation_config: dict = field(
-        default_factory=lambda: {"temperature": 0.7, "top_p": 1, "top_k": 1, "max_output_tokens": 2048}
+        default_factory=lambda: {
+            "temperature": 0.7,
+            "top_p": 1,
+            "top_k": 1,
+            "max_output_tokens": 2048,
+        }
     )
-    max_recent_conversation_messages: int = _get_int_env("MAX_RECENT_CONVERSATION_MESSAGES", default=8)
-    conversation_summary_trigger: int = _get_int_env("CONVERSATION_SUMMARY_TRIGGER", default=12)
+    max_recent_conversation_messages: int = _get_int_env(
+        "MAX_RECENT_CONVERSATION_MESSAGES", default=8
+    )
+    conversation_summary_trigger: int = _get_int_env(
+        "CONVERSATION_SUMMARY_TRIGGER", default=12
+    )
     safety_settings: list[dict] = field(
         default_factory=lambda: [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
@@ -148,6 +190,7 @@ class SessionState:
     meal_preferences: dict | None = None
     last_day_planned: str | None = None
     meal_plan: dict | None = None
+    pending_meal_preferences: dict | None = None
 
 
 app = AppConfig()
@@ -180,34 +223,50 @@ def validate_config():
     issues = {"errors": [], "warnings": [], "feature_flags": {}}
 
     if not app.groq_api_key:
-        issues["errors"].append("Missing GROQ_API_KEY. The main assistant chat flow will not work.")
+        issues["errors"].append(
+            "Missing GROQ_API_KEY. The main assistant chat flow will not work."
+        )
 
     issues["feature_flags"]["weather_enabled"] = bool(app.weather_api_key)
     if not app.weather_api_key:
-        issues["warnings"].append("OPENWEATHER_API_KEY not set. Weather requests will fail.")
+        issues["warnings"].append(
+            "OPENWEATHER_API_KEY not set. Weather requests will fail."
+        )
 
     issues["feature_flags"]["vision_enabled"] = bool(app.google_api_key)
     if not app.google_api_key:
-        issues["warnings"].append("GOOGLE_API_KEY not set. Screenshot vision analysis will fail.")
+        issues["warnings"].append(
+            "GOOGLE_API_KEY not set. Screenshot vision analysis will fail."
+        )
 
-    issues["feature_flags"]["tts_enabled"] = bool(app.enable_tts and app.narakeet_api_key)
+    issues["feature_flags"]["tts_enabled"] = bool(
+        app.enable_tts and app.narakeet_api_key
+    )
     if app.enable_tts and not app.narakeet_api_key:
-        issues["warnings"].append("ENABLE_TTS is true but NARAKEET_API_KEY is missing. TTS will stay disabled.")
+        issues["warnings"].append(
+            "ENABLE_TTS is true but NARAKEET_API_KEY is missing. TTS will stay disabled."
+        )
 
     issues["feature_flags"]["wakeword_enabled"] = bool(app.porcupine_api_key)
     if not app.debug_mode and not app.porcupine_api_key:
-        issues["warnings"].append("PORCUPINE_API_KEY not set. Wake word mode may fail outside debug mode.")
+        issues["warnings"].append(
+            "PORCUPINE_API_KEY not set. Wake word mode may fail outside debug mode."
+        )
 
     issues["feature_flags"]["app_launcher_enabled"] = bool(app.app_aliases)
     if not app.app_aliases:
-        issues["warnings"].append("APP_ALIASES_JSON is empty. App launching requests will fail.")
+        issues["warnings"].append(
+            "APP_ALIASES_JSON is empty. App launching requests will fail."
+        )
 
     for asset_path, label in [
         (app.wake_word_model, "Wake word model"),
         (app.porcupine_model_path, "Porcupine model"),
     ]:
         if not Path(asset_path).exists():
-            issues["warnings"].append(f"{label} not found at {asset_path}. Related wake word features may fail.")
+            issues["warnings"].append(
+                f"{label} not found at {asset_path}. Related wake word features may fail."
+            )
 
     if app.conversation_summary_trigger <= app.max_recent_conversation_messages:
         issues["warnings"].append(
@@ -231,17 +290,27 @@ def get_groq_client():
     return _groq_client
 
 
+class _GeminiModel:
+    """Small compatibility adapter; client and image lifetime end with the request."""
+
+    def generate_content(self, contents):
+        from google import genai
+
+        with genai.Client(api_key=app.google_api_key) as client:
+            return client.models.generate_content(
+                model=app.gemini_model,
+                contents=contents,
+                config={
+                    **app.generation_config,
+                    "safety_settings": app.safety_settings,
+                },
+            )
+
+
 def get_gemini_model():
     global _gemini_model
     if _gemini_model is None:
-        import google.generativeai as genai
-
-        genai.configure(api_key=app.google_api_key)
-        _gemini_model = genai.GenerativeModel(
-            "gemini-2.0-flash",
-            safety_settings=app.safety_settings,
-            generation_config=app.generation_config,
-        )
+        _gemini_model = _GeminiModel()
     return _gemini_model
 
 

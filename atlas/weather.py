@@ -1,7 +1,7 @@
 import json
 import logging
 import unicodedata
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -24,15 +24,15 @@ def handleWeatherPrompt(prompt):
     if request["status"] != "ok":
         return _build_error_result(request["message"])
 
-    logging.info(f"Weather requested for: City = {request['city']}, Date = {request['date']}")
-    report = getWeather(city=request["city"], date=request["date"])
+    report = getWeather(city=request["city"], date=request.get("date_kind", request["date"]))
+    if report["status"] == "ok":
+        request["date"] = report["date"]
     result = {
         "request": request,
         "report": report,
         "context": buildWeatherContext(request, report),
         "message": buildWeatherMessage(report),
     }
-    logging.info(f"Weather result: {result}")
     return result
 
 
@@ -54,7 +54,6 @@ def extractWeatherInfo(prompt):
             model=config.app.groq_model,
         )
         response = chat_completion.choices[0].message.content
-        logging.info(f"Response in extractWeatherInfo: {response}")
         data = json.loads(response)
 
         date_str = _normalize_text(data["date"])
@@ -73,17 +72,17 @@ def extractWeatherInfo(prompt):
             "status": "ok",
             "city": data["city"],
             "date": target_date.strftime("%Y-%m-%d"),
+            "date_kind": date_str,
         }
-        logging.info(f"Normalized weather request: {result}")
         return result
     except (json.JSONDecodeError, KeyError, ValueError) as exc:
-        logging.error(f"Weather request parsing failed: {exc}")
+        logging.error("Weather request parsing failed (%s)", type(exc).__name__)
         return {
             "status": "error",
             "message": "Non sono riuscito a capire per quale citta o giorno vuoi il meteo.",
         }
     except Exception as exc:
-        logging.error(f"Weather intent extraction failed: {exc}")
+        logging.error("Weather intent extraction failed (%s)", type(exc).__name__)
         return {
             "status": "error",
             "message": "C'e stato un problema mentre preparavo la richiesta meteo.",
@@ -96,7 +95,6 @@ def next_weekday(current_date, weekday_name):
     days_ahead = weekday - current_date.weekday()
     if days_ahead <= 0:
         days_ahead += 7
-    logging.info(f"next_weekday result: {current_date + timedelta(days=days_ahead)}")
     return current_date + timedelta(days=days_ahead)
 
 
@@ -105,12 +103,12 @@ def getWeather(city, lang="it", units="metric", date="today"):
     if not config.app.weather_api_key:
         return _build_weather_error(city, date, "Manca la chiave API per il servizio meteo.")
 
-    base_url = "http://api.openweathermap.org/data/2.5/"
+    base_url = "https://api.openweathermap.org/data/2.5/"
 
     try:
         if date == "today":
-            url = f"{base_url}weather?q={city}&appid={config.app.weather_api_key}&units={units}&lang={lang}"
-            response = requests.get(url, timeout=15)
+            url = f"{base_url}weather"
+            response = requests.get(url, params={"q": city, "appid": config.app.weather_api_key, "units": units, "lang": lang}, timeout=15)
             response.raise_for_status()
             payload = response.json()
 
@@ -120,23 +118,30 @@ def getWeather(city, lang="it", units="metric", date="today"):
             return {
                 "status": "ok",
                 "city": city,
-                "date": datetime.today().strftime("%Y-%m-%d"),
+                "date": datetime.now(timezone(timedelta(seconds=payload.get("timezone", 0)))).strftime("%Y-%m-%d"),
                 "description": payload["weather"][0]["description"],
                 "temperature_c": payload["main"]["temp"],
                 "source": "current",
             }
 
-        url = f"{base_url}forecast?q={city}&appid={config.app.weather_api_key}&units={units}&lang={lang}"
-        response = requests.get(url, timeout=15)
+        url = f"{base_url}forecast"
+        response = requests.get(url, params={"q": city, "appid": config.app.weather_api_key, "units": units, "lang": lang}, timeout=15)
         response.raise_for_status()
         payload = response.json()
 
         if payload.get("cod") != "200":
             return _build_weather_error(city, date, "Non sono riuscito a recuperare le previsioni meteo.")
 
-        target_date = datetime.strptime(date, "%Y-%m-%d").date()
+        city_timezone = timezone(timedelta(seconds=payload.get("city", {}).get("timezone", 0)))
+        local_now = datetime.now(city_timezone)
+        if date == "tomorrow":
+            target_date = (local_now + timedelta(days=1)).date()
+        elif date in WEEKDAY_MAP:
+            target_date = next_weekday(local_now, date).date()
+        else:
+            target_date = datetime.strptime(date, "%Y-%m-%d").date()
         forecasts = payload["list"]
-        target_forecasts = [item for item in forecasts if datetime.fromtimestamp(item["dt"]).date() == target_date]
+        target_forecasts = [item for item in forecasts if datetime.fromtimestamp(item["dt"], city_timezone).date() == target_date]
 
         if not target_forecasts:
             return _build_weather_error(city, date, f"Non ho trovato informazioni meteo per la data {date}.")
@@ -151,13 +156,13 @@ def getWeather(city, lang="it", units="metric", date="today"):
             "source": "forecast",
         }
     except requests.RequestException as exc:
-        logging.error(f"Weather request failed: {exc}")
+        logging.error("Weather request failed (%s)", type(exc).__name__)
         return _build_weather_error(city, date, "Si e verificato un errore di rete durante il recupero del meteo.")
     except (KeyError, ValueError, TypeError) as exc:
-        logging.error(f"Weather response parsing failed: {exc}")
+        logging.error("Weather response parsing failed (%s)", type(exc).__name__)
         return _build_weather_error(city, date, "Il servizio meteo ha restituito una risposta non valida.")
     except Exception as exc:
-        logging.error(f"Unexpected weather error: {exc}")
+        logging.error("Unexpected weather error (%s)", type(exc).__name__)
         return _build_weather_error(city, date, "Si e verificato un errore imprevisto durante il recupero del meteo.")
 
 

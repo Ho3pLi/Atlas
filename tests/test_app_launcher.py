@@ -99,7 +99,7 @@ class AppLauncherTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "ok")
         run_mock.assert_called_once_with(
-            ["taskkill", "/IM", "chrome.exe", "/T", "/F"],
+            ["taskkill", "/IM", "chrome.exe", "/T"],
             capture_output=True,
             text=True,
             check=False,

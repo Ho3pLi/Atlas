@@ -22,7 +22,7 @@ def handleFileSearchPrompt(prompt):
         matches = searchFiles(prompt)
         outcome = buildFileSearchResponse(matches)
     except Exception as exc:
-        logging.error(f"File search failed: {exc}")
+        logging.error("File search failed (%s)", type(exc).__name__)
         outcome = {
             "status": "error",
             "matches": [],
@@ -36,7 +36,6 @@ def handleFileSearchPrompt(prompt):
     elif outcome["status"] == "single":
         config.session.current_file_path = outcome["selected_path"]
 
-    logging.info(f"File search outcome: {outcome}")
     return outcome
 
 
@@ -50,14 +49,19 @@ def searchFiles(prompt):
     _extend_unique(all_results, seen_paths, exactSearch(filename, extension))
 
     if not all_results:
-        _extend_unique(all_results, seen_paths, fuzzySearch(filename))
+        _extend_unique(
+            all_results, seen_paths, fuzzySearch(filename, extension=extension)
+        )
 
     if 2 <= len(all_results) < 5:
         semantic_keywords = extractSemanticKeywords(prompt)
-        _extend_unique(all_results, seen_paths, semanticSearch(semantic_keywords))
+        _extend_unique(
+            all_results,
+            seen_paths,
+            semanticSearch(semantic_keywords, extension=extension),
+        )
 
     matches = all_results[:5]
-    logging.info(f"File search matches: {matches}")
     return matches
 
 
@@ -97,55 +101,51 @@ def handleFileChoice(user_choice, file_list):
 
     chosen_path = resolveFileChoice(user_choice, file_list)
     if chosen_path:
-        logging.info(f"Resolved file choice locally: {chosen_path}")
         return chosen_path
 
-    prompt_llm = (
-        "You are a model that extracts exactly ONE filename from a user's choice.\n"
-        "You receive a numbered list of filenames and the user's spoken choice.\n"
-        "You MUST return ONLY the exact filename from the provided list matching the user's choice.\n"
-        "If no choice can be resolved, return ONLY NONE."
-    )
-
-    file_names = [os.path.basename(path) for path in file_list]
-    user_prompt = f"List:\n{json.dumps(file_names)}\nUser choice: {user_choice}"
-    response = config.get_groq_client().chat.completions.create(
-        messages=[
-            {"role": "system", "content": prompt_llm},
-            {"role": "user", "content": user_prompt},
-        ],
-        model=config.app.groq_model,
-    )
-
-    chosen_filename = response.choices[0].message.content.strip()
-    logging.info(f"Extracted file choice via LLM: {chosen_filename}")
-
-    if chosen_filename == "NONE":
-        return None
-
-    for path in file_list:
-        if os.path.basename(path) == chosen_filename:
-            return path
-
+    # Ambiguous local selections must never be guessed by a language model.
     return None
 
 
 def resolveFileChoice(user_choice, file_list):
-    normalized_choice = user_choice.strip().lower()
-    file_names = [os.path.basename(path) for path in file_list]
-
-    number_match = re.search(r"\b([1-9]\d*)\b", normalized_choice)
-    if number_match:
-        index = int(number_match.group(1)) - 1
-        if 0 <= index < len(file_list):
-            return file_list[index]
-
-    for path, file_name in zip(file_list, file_names):
-        base_name = os.path.splitext(file_name)[0].lower()
-        lowered_name = file_name.lower()
-        if lowered_name in normalized_choice or base_name in normalized_choice:
-            return path
-
+    choice = user_choice.strip().casefold()
+    number = re.fullmatch(
+        r"(?:(?:apri\s+|scegli\s+)?(?:il\s+)?(?:file\s+)?(?:numero\s+)?)([1-9]\d*)[.!]?",
+        choice,
+    )
+    if number:
+        index = int(number.group(1)) - 1
+        return file_list[index] if 0 <= index < len(file_list) else None
+    for names in (
+        [(path, path.casefold()) for path in file_list],
+        [(path, os.path.basename(path).casefold()) for path in file_list],
+        [
+            (path, os.path.splitext(os.path.basename(path))[0].casefold())
+            for path in file_list
+        ],
+    ):
+        exact = [path for path, name in names if name == choice]
+        if exact:
+            return exact[0] if len(exact) == 1 else None
+    candidates = [(path, os.path.basename(path).casefold()) for path in file_list]
+    matches = [
+        (path, name)
+        for path, name in candidates
+        if re.search(r"(?<!\w)" + re.escape(name) + r"(?!\w)", choice)
+    ]
+    if not matches:
+        matches = [
+            (path, name)
+            for path, name in candidates
+            if re.search(
+                r"(?<!\w)" + re.escape(os.path.splitext(name)[0]) + r"(?!\w)", choice
+            )
+        ]
+    # Longest matching name wins only when unique (report finale vs report).
+    if matches:
+        longest = max(len(name) for _, name in matches)
+        winners = [path for path, name in matches if len(name) == longest]
+        return winners[0] if len(winners) == 1 else None
     return None
 
 
@@ -159,7 +159,7 @@ def summarizeFile(file_path):
     try:
         return atlas.groqPrompt(summary_prompt, None, None, None)
     except Exception as exc:
-        logging.error(f"File summarization failed: {exc}")
+        logging.error("File summarization failed (%s)", type(exc).__name__)
         return "Ho trovato il file, ma non sono riuscito a riassumerne il contenuto."
 
 
@@ -180,15 +180,17 @@ def extractFileInfo(prompt):
     )
 
     chat_completion = config.get_groq_client().chat.completions.create(
-        messages=[{"role": "system", "content": sys_msg}, {"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": sys_msg},
+            {"role": "user", "content": prompt},
+        ],
         model=config.app.groq_model,
     )
     response = chat_completion.choices[0].message.content
-    logging.info(f"Response in extractFileInfo(): {response}")
     try:
         return json.loads(response)
     except json.JSONDecodeError as exc:
-        logging.error(f"File info parsing failed: {exc}")
+        logging.error("File info parsing failed (%s)", type(exc).__name__)
         return {"filename": prompt.strip(), "extension": "NONE"}
 
 
@@ -205,15 +207,17 @@ def exactSearch(filename, extension, allowed_dirs=None):
             for file_name in files:
                 name, ext = os.path.splitext(file_name)
                 if extension != "NONE":
-                    if name.lower() == filename.lower() and ext.lower() == extension.lower():
+                    if (
+                        name.lower() == filename.lower()
+                        and ext.lower() == extension.lower()
+                    ):
                         results.append(os.path.join(root, file_name))
                 elif name.lower() == filename.lower():
                     results.append(os.path.join(root, file_name))
-    logging.info(f"exactSearch res: {results}")
     return results
 
 
-def fuzzySearch(filename, allowed_dirs=None, cutoff=0.8):
+def fuzzySearch(filename, allowed_dirs=None, cutoff=0.8, extension="NONE"):
     logging.info("Entering fuzzySearch() function...")
     allowed_dirs = allowed_dirs or config.app.allowed_dirs
     results = []
@@ -225,6 +229,11 @@ def fuzzySearch(filename, allowed_dirs=None, cutoff=0.8):
 
             files_by_stem = {}
             for file_name in files:
+                if (
+                    extension != "NONE"
+                    and os.path.splitext(file_name)[1].lower() != extension.lower()
+                ):
+                    continue
                 stem = os.path.splitext(file_name)[0].lower()
                 files_by_stem.setdefault(stem, []).append(file_name)
 
@@ -236,7 +245,6 @@ def fuzzySearch(filename, allowed_dirs=None, cutoff=0.8):
                 for file_name in files_by_stem[match]:
                     results.append(os.path.join(root, file_name))
 
-    logging.info(f"fuzzySearch res: {results}")
     return results
 
 
@@ -249,20 +257,22 @@ def extractSemanticKeywords(prompt):
     )
 
     chat_completion = config.get_groq_client().chat.completions.create(
-        messages=[{"role": "system", "content": sys_msg}, {"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": sys_msg},
+            {"role": "user", "content": prompt},
+        ],
         model=config.app.groq_model,
     )
 
     response = chat_completion.choices[0].message.content
-    logging.info(f"Response in extractSemanticKeywords(): {response}")
     try:
         return json.loads(response)
     except json.JSONDecodeError as exc:
-        logging.error(f"Semantic keyword parsing failed: {exc}")
+        logging.error("Semantic keyword parsing failed (%s)", type(exc).__name__)
         return []
 
 
-def semanticSearch(keywords, allowed_dirs=None):
+def semanticSearch(keywords, allowed_dirs=None, extension="NONE"):
     allowed_dirs = allowed_dirs or config.app.allowed_dirs
     matches = []
     for base_dir in allowed_dirs:
@@ -272,10 +282,14 @@ def semanticSearch(keywords, allowed_dirs=None):
             files = [f for f in files if not f.startswith(".")]
 
             for file_name in files:
+                if (
+                    extension != "NONE"
+                    and os.path.splitext(file_name)[1].lower() != extension.lower()
+                ):
+                    continue
                 if any(keyword.lower() in file_name.lower() for keyword in keywords):
                     matches.append(os.path.join(root, file_name))
 
-    logging.info(f"semanticSearch: {matches}")
     return matches
 
 
@@ -290,7 +304,7 @@ def openFile(file_path):
         os.startfile(file_path)
         return "Apertura del file in corso..."
     except Exception as exc:
-        logging.error(f"Error opening file: {exc}")
+        logging.error("Error opening file (%s)", type(exc).__name__)
         return "Errore: impossibile aprire il file."
 
 
@@ -309,30 +323,31 @@ def _read_file_content(file_path):
         return _FileReadResult(message="Errore: file non trovato.")
 
     mime_type, _ = mimetypes.guess_type(file_path)
-    logging.info(f"Mime type: {mime_type}")
 
     if mime_type and mime_type.startswith("text"):
         try:
             with open(file_path, "r", encoding="utf-8") as file:
                 return _FileReadResult(content=file.read())
         except Exception as exc:
-            logging.error(f"Error reading file: {exc}")
+            logging.error("Error reading file (%s)", type(exc).__name__)
             return _FileReadResult(message="Errore: impossibile leggere il file.")
 
-    if file_path.endswith(".pdf"):
+    if str(file_path).lower().endswith(".pdf"):
         try:
             import pdfplumber
 
             with pdfplumber.open(file_path) as pdf:
-                text = "\n".join(text for page in pdf.pages if (text := page.extract_text()))
+                text = "\n".join(
+                    text for page in pdf.pages if (text := page.extract_text())
+                )
             if text.strip():
                 return _FileReadResult(content=text)
             return _FileReadResult(message="Nessun testo leggibile trovato nel PDF.")
         except Exception as exc:
-            logging.error(f"Error reading PDF: {exc}")
+            logging.error("Error reading PDF (%s)", type(exc).__name__)
             return _FileReadResult(message="Errore: impossibile leggere il PDF.")
 
-    if file_path.endswith(".docx"):
+    if str(file_path).lower().endswith(".docx"):
         try:
             from docx import Document
 
@@ -340,9 +355,11 @@ def _read_file_content(file_path):
             text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
             if text.strip():
                 return _FileReadResult(content=text)
-            return _FileReadResult(message="Nessun testo leggibile trovato nel documento.")
+            return _FileReadResult(
+                message="Nessun testo leggibile trovato nel documento."
+            )
         except Exception as exc:
-            logging.error(f"Error reading DOCX: {exc}")
+            logging.error("Error reading DOCX (%s)", type(exc).__name__)
             return _FileReadResult(message="Errore: impossibile leggere il documento.")
 
     return _FileReadResult()
