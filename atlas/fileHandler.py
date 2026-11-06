@@ -223,13 +223,18 @@ def fuzzySearch(filename, allowed_dirs=None, cutoff=0.8):
             dirs[:] = [d for d in dirs if not d.startswith(".")]
             files = [f for f in files if not f.startswith(".")]
 
-            file_names = [os.path.splitext(file_name)[0] for file_name in files]
-            close_matches = difflib.get_close_matches(filename.lower(), file_names, n=10, cutoff=cutoff)
+            files_by_stem = {}
+            for file_name in files:
+                stem = os.path.splitext(file_name)[0].lower()
+                files_by_stem.setdefault(stem, []).append(file_name)
+
+            close_matches = difflib.get_close_matches(
+                filename.lower(), files_by_stem, n=10, cutoff=cutoff
+            )
 
             for match in close_matches:
-                for file_name in files:
-                    if match == os.path.splitext(file_name)[0].lower():
-                        results.append(os.path.join(root, file_name))
+                for file_name in files_by_stem[match]:
+                    results.append(os.path.join(root, file_name))
 
     logging.info(f"fuzzySearch res: {results}")
     return results
