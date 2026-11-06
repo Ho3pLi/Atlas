@@ -248,6 +248,7 @@ class ReviewTests(unittest.TestCase):
 
     def test_router_rejects_invalid_json_types_and_fields(self):
         invalid = [
+            {"action": "get_time", "confidence": 10**400, "needs_clarification": False},
             [],
             None,
             "hello",

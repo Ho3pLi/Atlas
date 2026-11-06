@@ -397,7 +397,6 @@ def _validate_intent(intent):
         not isinstance(intent.get("needs_clarification"), bool)
         or isinstance(intent.get("confidence"), bool)
         or not isinstance(intent.get("confidence"), (int, float))
-        or not math.isfinite(intent["confidence"])
         or not 0 <= intent["confidence"] <= 1
     ):
         return {
@@ -447,7 +446,7 @@ def _validate_intent(intent):
 def _normalize_confidence(value):
     try:
         confidence = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0.0
     if not math.isfinite(confidence):
         return 0.0
