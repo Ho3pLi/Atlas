@@ -39,6 +39,91 @@ class FileHandlerTests(unittest.TestCase):
         self.assertIn("problema durante la ricerca", outcome["message"])
 
 
+class FuzzyFileSearchTests(unittest.TestCase):
+    def setUp(self):
+        self.folder = tempfile.TemporaryDirectory()
+        self.addCleanup(self.folder.cleanup)
+        self.root = Path(self.folder.name)
+
+    def test_finds_mixed_case_filename_with_typo(self):
+        path = self.root / "Relazione Finale.pdf"
+        path.touch()
+
+        self.assertEqual(
+            fileHandler.fuzzySearch("relazione finle", allowed_dirs=[str(self.root)]),
+            [str(path)],
+        )
+
+    def test_query_and_filenames_are_case_insensitive(self):
+        for index, name in enumerate(("REPORT.pdf", "Report.pdf", "report.pdf")):
+            with self.subTest(name=name):
+                folder = self.root / str(index)
+                folder.mkdir()
+                path = folder / name
+                path.touch()
+                self.assertEqual(
+                    fileHandler.fuzzySearch("REPOR", allowed_dirs=[str(folder)]),
+                    [str(path)],
+                )
+
+    def test_shared_normalized_stem_returns_each_original_file_once(self):
+        paths = [self.root / "Report.pdf", self.root / "REPORT.docx",
+                 self.root / "report.txt"]
+        for path in paths:
+            path.touch()
+
+        results = fileHandler.fuzzySearch("repor", allowed_dirs=[str(self.root)])
+
+        self.assertCountEqual(results, [str(path) for path in paths])
+
+    def test_same_filename_in_different_directories_keeps_both_paths(self):
+        paths = [self.root / "first" / "Report.pdf", self.root / "second" / "Report.pdf"]
+        for path in paths:
+            path.parent.mkdir()
+            path.touch()
+
+        self.assertCountEqual(
+            fileHandler.fuzzySearch("repor", allowed_dirs=[str(self.root)]),
+            [str(path) for path in paths],
+        )
+
+    def test_hidden_files_and_directories_remain_excluded(self):
+        visible = self.root / "report.pdf"
+        visible.touch()
+        (self.root / ".report.pdf").touch()
+        hidden = self.root / ".hidden"
+        hidden.mkdir()
+        (hidden / "report.pdf").touch()
+
+        self.assertEqual(
+            fileHandler.fuzzySearch("repor", allowed_dirs=[str(self.root)]),
+            [str(visible)],
+        )
+
+    def test_similarity_cutoff_is_respected(self):
+        path = self.root / "report.pdf"
+        path.touch()
+
+        self.assertEqual(
+            fileHandler.fuzzySearch("repor", allowed_dirs=[str(self.root)], cutoff=1.0),
+            [],
+        )
+        self.assertEqual(
+            fileHandler.fuzzySearch("repor", allowed_dirs=[str(self.root)], cutoff=0.8),
+            [str(path)],
+        )
+
+    def test_search_files_falls_back_to_fuzzy_for_mixed_case_name(self):
+        path = self.root / "Relazione Finale.pdf"
+        path.touch()
+        with patch.object(fileHandler.config.app, "allowed_dirs", [str(self.root)]), \
+                patch.object(fileHandler, "extractFileInfo", return_value={
+                    "filename": "relazione finle", "extension": ".pdf"}), \
+                patch.object(fileHandler, "extractSemanticKeywords") as semantic:
+            self.assertEqual(fileHandler.searchFiles("trova relazione finle"), [str(path)])
+        semantic.assert_not_called()
+
+
 class FileSummaryTests(unittest.TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory()
