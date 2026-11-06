@@ -1,6 +1,6 @@
 from importlib import import_module
 
-import atlas.config as config
+from . import config as config
 
 
 def _load_attr(module_name, attr_name):

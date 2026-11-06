@@ -1,4 +1,5 @@
 import json
+import math
 import logging
 import re
 import unicodedata
@@ -38,26 +39,58 @@ HEURISTIC_RULES = [
             "parlami di te",
         ),
     ),
-    ("get_date", ("che giorno", "che data", "data di oggi", "giorno di oggi", "oggi che giorno", "oggi che data")),
-    ("get_weather", ("meteo", "tempo", "piove", "piovera", "temperature", "temperatura", "weather")),
+    (
+        "get_date",
+        (
+            "che giorno",
+            "che data",
+            "data di oggi",
+            "giorno di oggi",
+            "oggi che giorno",
+            "oggi che data",
+        ),
+    ),
+    (
+        "get_weather",
+        ("meteo", "tempo", "piove", "piovera", "temperature", "temperatura", "weather"),
+    ),
     ("take_screenshot", ("screenshot", "schermata", "schermo", "screen")),
     ("search_file", ("file", "documento", "pdf", "docx", "cartella", "trova", "cerca")),
     ("open_app", ("apri programma", "apri app", "avvia", "lancia", "esegui")),
     ("close_app", ("chiudi", "termina", "stoppa")),
-    ("build_meal_plan", ("pasto", "pasti", "meal plan", "menu", "colazione", "pranzo", "cena", "spuntino")),
-    ("change_meal_suggestion", ("cambia pasto", "cambia menu", "altra cena", "altro pranzo", "modifica pasto")),
+    (
+        "build_meal_plan",
+        (
+            "pasto",
+            "pasti",
+            "meal plan",
+            "menu",
+            "colazione",
+            "pranzo",
+            "cena",
+            "spuntino",
+        ),
+    ),
+    (
+        "change_meal_suggestion",
+        ("cambia pasto", "cambia menu", "altra cena", "altro pranzo", "modifica pasto"),
+    ),
 ]
 
 LOW_CONFIDENCE_THRESHOLD = 0.55
 
 
-def groqPrompt(prompt, imgContext=None, filePath=None, weatherData=None, mealSuggestion=None):
+def groqPrompt(
+    prompt, imgContext=None, filePath=None, weatherData=None, mealSuggestion=None
+):
     if imgContext:
         prompt = f"\n\nUSER PROMPT: {prompt}\n\nIMAGE CONTEXT: {imgContext}\n"
     elif filePath:
         prompt = f"\n\nUSER PROMPT: {prompt}\n\nPATH CONTEXT: {filePath}\n"
     elif weatherData:
-        weather_context = weatherData.get("context") if isinstance(weatherData, dict) else weatherData
+        weather_context = (
+            weatherData.get("context") if isinstance(weatherData, dict) else weatherData
+        )
         prompt = f"\n\nUSER PROMPT: {prompt}\n\nWEATHER CONTEXT: {weather_context}\n"
     elif mealSuggestion:
         prompt = (
@@ -66,7 +99,7 @@ def groqPrompt(prompt, imgContext=None, filePath=None, weatherData=None, mealSug
         )
 
     model = config.app.groq_model if len(prompt) < 50 else config.app.groq_model2
-    logging.info(f"[Groq] Sending request - Model: {model} | Prompt: {prompt}")
+    logging.info("Sending Groq request: model=%s characters=%s", model, len(prompt))
 
     config.session.conversation.append({"role": "user", "content": prompt})
     _trim_conversation_if_needed()
@@ -75,10 +108,12 @@ def groqPrompt(prompt, imgContext=None, filePath=None, weatherData=None, mealSug
         model=model,
     )
     response = chat_completion.choices[0].message
-    config.session.conversation.append({"role": response.role, "content": response.content})
+    config.session.conversation.append(
+        {"role": response.role, "content": response.content}
+    )
     _trim_conversation_if_needed()
 
-    logging.info(f"[Groq] Response received: {response.content}")
+    logging.info("Groq response received.")
     return response.content
 
 
@@ -87,16 +122,37 @@ def functionCall(prompt):
 
     heuristic_intent = _route_with_heuristics(prompt)
     if heuristic_intent is not None:
-        logging.info(f"Chosen action via heuristics: {heuristic_intent}")
         return heuristic_intent
 
     llm_intent = _route_with_llm(prompt)
     validated_intent = _validate_intent(llm_intent)
-    logging.info(f"Chosen action via LLM: {validated_intent}")
+    if validated_intent["action"] in {"open_app", "close_app"}:
+        detector = (
+            _detect_open_app_intent
+            if validated_intent["action"] == "open_app"
+            else _detect_close_app_intent
+        )
+        if detector(prompt) is None:
+            validated_intent.update(
+                action="none",
+                needs_clarification=True,
+                reason="explicit_app_command_required",
+            )
     return validated_intent
 
 
 def _route_with_heuristics(prompt):
+    if re.match(
+        r"^(?:cosa significa|che significa|spiega(?:mi)?\b|come funziona\b|non\s+(?:apri|avvia|chiudi|termina|fare|eseguire)\b)",
+        (prompt or "").strip().casefold(),
+    ):
+        return {
+            "action": "none",
+            "confidence": 0.95,
+            "needs_clarification": False,
+            "reason": "informational_or_negated_request",
+            "source": "heuristic",
+        }
     capabilities_intent = _detect_capabilities_intent(prompt)
     if capabilities_intent is not None:
         return capabilities_intent
@@ -118,9 +174,28 @@ def _route_with_heuristics(prompt):
         return close_app_intent
 
     lowered_prompt = prompt.lower()
+    if any(
+        word in lowered_prompt
+        for word in (
+            "cambia pasto",
+            "cambia menu",
+            "altra cena",
+            "altro pranzo",
+            "modifica pasto",
+        )
+    ):
+        return {
+            "action": "change_meal_suggestion",
+            "confidence": 0.95,
+            "needs_clarification": False,
+            "reason": "meal_change",
+            "source": "heuristic",
+        }
     scores = {}
 
     for action, keywords in HEURISTIC_RULES:
+        if action in {"open_app", "close_app"}:
+            continue
         score = sum(1 for keyword in keywords if keyword in lowered_prompt)
         if score:
             scores[action] = score
@@ -161,61 +236,26 @@ def _route_with_heuristics(prompt):
 
 
 def _detect_open_app_intent(prompt):
-    lowered_prompt = (prompt or "").strip().lower()
-    if not lowered_prompt:
-        return None
-
-    match = re.search(
-        r"\b(?:apri|avvia|lancia|esegui)\b\s+(?:il|lo|la|l'|un|una)?\s*(?:programma|applicazione|app)?\s*(.+)$",
-        lowered_prompt,
-    )
-    if not match:
-        return None
-
-    requested_app = _normalize_text(_clean_app_name(match.group(1)))
-    if not requested_app:
-        return None
-
-    for alias in config.app.app_aliases.keys():
-        if _normalize_text(alias) == requested_app:
-            return {
-                "action": "open_app",
-                "confidence": 0.92,
-                "needs_clarification": False,
-                "reason": "app_alias_match",
-                "source": "heuristic",
-            }
-
-    return None
+    return _detect_app_intent(prompt, close=False)
 
 
 def _detect_close_app_intent(prompt):
-    lowered_prompt = (prompt or "").strip().lower()
-    if not lowered_prompt:
+    return _detect_app_intent(prompt, close=True)
+
+
+def _detect_app_intent(prompt, close):
+    from atlas.appLauncher import APP_CLOSE_PATTERNS, extractAppName, resolveAppAlias
+
+    name = extractAppName(prompt, patterns=APP_CLOSE_PATTERNS if close else None)
+    if not resolveAppAlias(name):
         return None
-
-    match = re.search(
-        r"\b(?:chiudi|termina|stoppa)\b\s+(?:il|lo|la|l'|un|una)?\s*(?:programma|applicazione|app)?\s*(.+)$",
-        lowered_prompt,
-    )
-    if not match:
-        return None
-
-    requested_app = _normalize_text(_clean_app_name(match.group(1)))
-    if not requested_app:
-        return None
-
-    for alias in config.app.app_aliases.keys():
-        if _normalize_text(alias) == requested_app:
-            return {
-                "action": "close_app",
-                "confidence": 0.92,
-                "needs_clarification": False,
-                "reason": "app_alias_match",
-                "source": "heuristic",
-            }
-
-    return None
+    return {
+        "action": "close_app" if close else "open_app",
+        "confidence": 0.92,
+        "needs_clarification": False,
+        "reason": "app_alias_match",
+        "source": "heuristic",
+    }
 
 
 def _detect_date_intent(prompt):
@@ -303,13 +343,17 @@ def _route_with_llm(prompt):
         "confidence must be a number between 0 and 1."
     )
 
-    function_convo = [{"role": "system", "content": sys_msg}, {"role": "user", "content": prompt}]
+    function_convo = [
+        {"role": "system", "content": sys_msg},
+        {"role": "user", "content": prompt},
+    ]
     chat_completion = config.get_groq_client().chat.completions.create(
         messages=function_convo,
         model=config.app.groq_model2,
+        response_format={"type": "json_object"},
     )
-    response = chat_completion.choices[0].message.content.strip()
-    logging.info(f"Raw routed action: {response}")
+    content = chat_completion.choices[0].message.content
+    response = content.strip() if isinstance(content, str) else ""
 
     try:
         parsed = json.loads(response)
@@ -323,16 +367,45 @@ def _route_with_llm(prompt):
             "source": "llm",
         }
 
+    if not isinstance(parsed, dict):
+        return {
+            "action": "none",
+            "confidence": 0,
+            "needs_clarification": True,
+            "reason": "invalid_json",
+            "source": "llm",
+        }
     parsed["source"] = "llm"
     return parsed
 
 
 def _validate_intent(intent):
+    if not isinstance(intent, dict):
+        intent = {}
     action = intent.get("action", "none")
-    if action not in VALID_ACTIONS:
-        logging.warning(f"Router returned invalid action '{action}'. Falling back to none.")
-        action = "none"
+    if not isinstance(action, str) or action not in VALID_ACTIONS:
+        logging.warning("Router returned an invalid action. Falling back to none.")
+        return {
+            "action": "none",
+            "confidence": 0,
+            "needs_clarification": True,
+            "reason": "invalid_action",
+            "source": "llm",
+        }
 
+    if (
+        not isinstance(intent.get("needs_clarification"), bool)
+        or isinstance(intent.get("confidence"), bool)
+        or not isinstance(intent.get("confidence"), (int, float))
+        or not 0 <= intent["confidence"] <= 1
+    ):
+        return {
+            "action": "none",
+            "confidence": 0,
+            "needs_clarification": True,
+            "reason": "invalid_schema",
+            "source": "llm",
+        }
     confidence = _normalize_confidence(intent.get("confidence", 0.0))
     needs_clarification = bool(intent.get("needs_clarification", False))
     reason = str(intent.get("reason", ""))
@@ -342,11 +415,21 @@ def _validate_intent(intent):
     if confidence < LOW_CONFIDENCE_THRESHOLD and action != "none":
         needs_clarification = True
 
-    if needs_clarification and action != "none" and confidence < LOW_CONFIDENCE_THRESHOLD:
+    if (
+        needs_clarification
+        and action != "none"
+        and confidence < LOW_CONFIDENCE_THRESHOLD
+    ):
         action = "none"
 
     if action == "none":
-        fallback_reasons = {"unknown_intent", "no_specific_request", "unclear_request", "fallback", "invalid_json"}
+        fallback_reasons = {
+            "unknown_intent",
+            "no_specific_request",
+            "unclear_request",
+            "fallback",
+            "invalid_json",
+        }
         if needs_clarification or normalized_reason in fallback_reasons:
             confidence = min(confidence, 0.4)
             needs_clarification = True
@@ -363,16 +446,11 @@ def _validate_intent(intent):
 def _normalize_confidence(value):
     try:
         confidence = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        return 0.0
+    if not math.isfinite(confidence):
         return 0.0
     return max(0.0, min(1.0, round(confidence, 2)))
-
-
-def _clean_app_name(value):
-    candidate = re.sub(r"[.!?]+$", "", value).strip()
-    candidate = re.sub(r"\b(per favore|grazie)\b", "", candidate).strip()
-    candidate = re.sub(r"\s+", " ", candidate)
-    return candidate
 
 
 def _normalize_text(value):
@@ -408,7 +486,9 @@ def _trim_conversation_if_needed():
     if not messages_to_summarize:
         return
 
-    summary = _summarize_messages(messages_to_summarize, config.session.conversation_summary)
+    summary = _summarize_messages(
+        messages_to_summarize, config.session.conversation_summary
+    )
     config.session.conversation_summary = summary
     config.session.conversation = [config.session.conversation[0], *messages_to_keep]
     logging.info(
@@ -420,8 +500,7 @@ def _trim_conversation_if_needed():
 
 def _summarize_messages(messages, previous_summary=None):
     formatted_messages = "\n".join(
-        f"{message['role'].upper()}: {message['content']}"
-        for message in messages
+        f"{message['role'].upper()}: {message['content']}" for message in messages
     )
 
     summary_prompt = (
@@ -447,5 +526,5 @@ def _summarize_messages(messages, previous_summary=None):
         model=config.app.groq_model,
     )
     summary = chat_completion.choices[0].message.content.strip()
-    logging.info(f"Updated conversation summary: {summary}")
+    logging.info("Conversation summary updated.")
     return summary

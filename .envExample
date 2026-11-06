@@ -24,9 +24,13 @@ PROMPT_PATH=temp/prompt.wav
 LOG_PATH=logs/atlas.log
 
 # Optional model overrides
-GROQ_MODEL=llama-3.1-8b-instant
-GROQ_MODEL2=llama-3.3-70b-versatile
+GROQ_MODEL=openai/gpt-oss-20b
+GROQ_MODEL2=openai/gpt-oss-120b
 
 # Optional conversation memory tuning
 MAX_RECENT_CONVERSATION_MESSAGES=8
 CONVERSATION_SUMMARY_TRIGGER=12
+
+GEMINI_MODEL=gemini-3.8-flash
+LISTEN_TIMEOUT=10
+PHRASE_TIME_LIMIT=30

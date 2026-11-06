@@ -7,6 +7,7 @@ import atlas
 def run():
     try:
         from PyQt6.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
+        from PyQt6.QtGui import QTextCursor
         from PyQt6.QtWidgets import (
             QApplication,
             QHBoxLayout,
@@ -75,10 +76,13 @@ def run():
             self.send_button.clicked.connect(self._handle_send)
             self.prompt_input.returnPressed.connect(self._handle_send)
 
-            self._append_message("Atlas: GUI inizializzata. Scrivi un messaggio per iniziare.")
+            self._append_message(
+                "Atlas: GUI inizializzata. Scrivi un messaggio per iniziare."
+            )
 
         def _append_message(self, message):
-            self.chat_box.append(message)
+            self.chat_box.moveCursor(QTextCursor.MoveOperation.End)
+            self.chat_box.insertPlainText(message + "\n")
 
         @pyqtSlot(str)
         def _set_status(self, value):
@@ -107,15 +111,19 @@ def run():
             self._set_status("Atlas: elaborazione in corso...")
             self._lock_input()
 
-            worker = threading.Thread(target=self._process_prompt_worker, args=(prompt,), daemon=True)
+            worker = threading.Thread(
+                target=self._process_prompt_worker, args=(prompt,), daemon=True
+            )
             worker.start()
 
         def _process_prompt_worker(self, prompt):
             try:
                 response = atlas.process_user_prompt(prompt)
             except Exception as exc:
-                logging.exception("GUI prompt processing failed: %s", exc)
-                response = "Si e verificato un errore durante l'elaborazione della richiesta."
+                logging.error("GUI prompt processing failed (%s)", type(exc).__name__)
+                response = (
+                    "Si e verificato un errore durante l'elaborazione della richiesta."
+                )
 
             if not response:
                 response = "Nessuna risposta disponibile."

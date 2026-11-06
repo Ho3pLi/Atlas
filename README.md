@@ -351,3 +351,61 @@ Or open an issue on GitHub.
 ## Author
 
 - [@Ho3pLi](https://www.github.com/Ho3pLi)
+
+
+## Reviewed runtime behavior (November 2026)
+
+**Italiano**
+
+- I modelli predefiniti sono `openai/gpt-oss-20b` / `openai/gpt-oss-120b`
+  su **Groq** e `gemini-3.8-flash` per le immagini, tramite `google-genai`.
+  Gli override sono `GROQ_MODEL`, `GROQ_MODEL2`, `GEMINI_MODEL`.
+  Se hai gia un `.env`, aggiorna gli eventuali vecchi nomi: gli override hanno
+  precedenza sui valori predefiniti. Non serve una chiave OpenAI per i modelli
+  serviti da Groq. Disponibilita, quote e costi dipendono dal tuo provider/piano;
+  cambiare modello non cambia il piano dell'account.
+- CLI: le risposte vengono stampate anche con TTS disabilitato; Ctrl+C/EOF
+  termina il ciclo. Per chiudere un'app serve un comando esplicito come
+  `chiudi chrome`. La chiusura Windows e normale, senza terminazione forzata.
+  Se l'app non si chiude, gestiscila manualmente per preservare il lavoro aperto.
+- `APP_ALIASES_JSON` accetta stringhe Windows oppure liste di argomenti, ad esempio
+  `{"browser":["C:\\Program Files\\Browser\\browser.exe","--profile","Profile 1"]}`.
+- Dopo una ricerca con piu file puoi scegliere il numero, il nome completo o
+  il percorso; i nomi ambigui richiedono chiarimento. `annulla ricerca` elimina
+  la selezione in sospeso. Puoi fare altre domande e tornare alla selezione.
+- Il piano pasti raccoglie sei preferenze tramite i normali turni di chat
+  (anche nella GUI), senza valori dimostrativi imposti. `annulla piano`
+  interrompe la raccolta. Due pasti sono pranzo/cena, tre includono la colazione.
+  `cambia pasto` sostituisce e salva il piano corrente solo se completo.
+- `LISTEN_TIMEOUT` (10 secondi) e `PHRASE_TIME_LIMIT` (30 secondi) limitano
+  l'ascolto. Le registrazioni temporanee vengono eliminate dopo la trascrizione;
+  il TTS usa memoria senza un file audio persistente.
+- I log omettono prompt, risposte, trascrizioni e preferenze, oscurano le chiavi
+  configurate e ruotano a 2 MB con tre copie. Gli screenshot restano nel percorso
+  configurato. Log precedenti a questo aggiornamento non vengono riscritti.
+
+**English**
+
+Defaults now use `openai/gpt-oss-20b` / `openai/gpt-oss-120b` on **Groq** and
+`gemini-3.8-flash` through `google-genai`. Existing `.env` overrides take
+precedence and must be updated if they name retired models. No OpenAI key is
+needed for Groq-hosted models; provider access, quotas and pricing still apply.
+
+The CLI always prints responses. Windows application commands require explicit
+syntax and close gracefully without forced termination. File selection supports
+exact names, paths, numbers, cancellation and switching to other questions.
+Meal preferences are collected through ordinary chat turns in CLI/GUI; generated
+and replacement plans are validated before saving. Audio capture is bounded,
+temporary recordings are removed, and logs omit conversation bodies, redact
+configured credentials and rotate with bounded retention.
+
+Run the offline regression suite with:
+
+```bash
+python -m unittest discover -s tests -v
+python -m pip check
+```
+
+Tests use synthetic documents/images/audio and mocked network/process operations.
+They do not certify live provider access, hardware audio, ffmpeg playback or
+actual application shutdown on your desktop. See [the review fix checklist](docs/review-fixes-20261106.md).

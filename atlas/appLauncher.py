@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import re
-import shlex
+import ctypes
 import shutil
 import subprocess
 import unicodedata
@@ -12,10 +12,10 @@ import atlas.config as config
 
 
 APP_LAUNCH_PATTERNS = [
-    r"\b(?:apri|avvia|lancia|esegui)\b\s+(?:il|lo|la|l'|un|una)?\s*(?:programma|applicazione|app)?\s*(.+)$",
+    r"^(?:atlas[, ]+)?(?:per favore[, ]+)?(?:apri|avvia|lancia|esegui)\b\s+(?:il|lo|la|l'|un|una)?\s*(?:programma|applicazione|app)?\s*(.+)$",
 ]
 APP_CLOSE_PATTERNS = [
-    r"\b(?:chiudi|termina|stoppa)\b\s+(?:il|lo|la|l'|un|una)?\s*(?:programma|applicazione|app)?\s*(.+)$",
+    r"^(?:atlas[, ]+)?(?:per favore[, ]+)?(?:chiudi|termina|stoppa)\b\s+(?:il|lo|la|l'|un|una)?\s*(?:programma|applicazione|app)?\s*(.+)$",
 ]
 
 
@@ -107,14 +107,16 @@ def listConfiguredApps():
 
 def launchApplication(app_name, target):
     try:
-        command = shlex.split(target, posix=False)
+        command = _split_command(target)
         if not command:
             raise ValueError("empty app launch command")
         resolved_executable = _resolve_executable(command[0])
         if not resolved_executable:
             raise FileNotFoundError(command[0])
 
-        launch_command = _build_launch_command(app_name, resolved_executable, command[1:])
+        launch_command = _build_launch_command(
+            app_name, resolved_executable, command[1:]
+        )
         subprocess.Popen(
             launch_command,
             stdin=subprocess.DEVNULL,
@@ -137,7 +139,7 @@ def launchApplication(app_name, target):
             "message": f"Non trovo l'eseguibile configurato per {app_name}: {target}.",
         }
     except Exception as exc:
-        logging.error("App launch failed for %s (%s): %s", app_name, target, exc)
+        logging.error("App launch failed (%s)", type(exc).__name__)
         return {
             "status": "error",
             "app_name": app_name,
@@ -148,7 +150,7 @@ def launchApplication(app_name, target):
 
 def closeApplication(app_name, target):
     try:
-        command = shlex.split(target, posix=False)
+        command = _split_command(target)
         if not command:
             raise ValueError("empty app close command")
 
@@ -163,13 +165,15 @@ def closeApplication(app_name, target):
             }
 
         result = subprocess.run(
-            ["taskkill", "/IM", process_name, "/T", "/F"],
+            ["taskkill", "/IM", process_name, "/T"],
             capture_output=True,
             text=True,
             check=False,
         )
         if result.returncode != 0:
-            logging.warning("taskkill failed for %s: %s", process_name, result.stderr.strip())
+            logging.warning(
+                "taskkill failed for %s: %s", process_name, result.stderr.strip()
+            )
             return {
                 "status": "error",
                 "app_name": app_name,
@@ -181,10 +185,10 @@ def closeApplication(app_name, target):
             "status": "ok",
             "app_name": app_name,
             "target": target,
-            "message": f"Ho chiuso {app_name}.",
+            "message": f"Ho inviato la richiesta di chiusura a {app_name}.",
         }
     except Exception as exc:
-        logging.error("App close failed for %s (%s): %s", app_name, target, exc)
+        logging.error("App close failed (%s)", type(exc).__name__)
         return {
             "status": "error",
             "app_name": app_name,
@@ -211,9 +215,17 @@ def _build_launch_command(app_name, resolved_executable, args):
     command = [resolved_executable, *args]
 
     # Discord may require Update.exe with process args on some installations.
-    if normalized_app == "discord" and Path(resolved_executable).name.lower() == "update.exe" and not args:
+    if (
+        normalized_app == "discord"
+        and Path(resolved_executable).name.lower() == "update.exe"
+        and not args
+    ):
         command = [resolved_executable, "--processStart", "Discord.exe"]
-    elif normalized_app == "medal" and Path(resolved_executable).name.lower() == "update.exe" and not args:
+    elif (
+        normalized_app == "medal"
+        and Path(resolved_executable).name.lower() == "update.exe"
+        and not args
+    ):
         command = [resolved_executable, "--processStart", "Medal.exe"]
 
     return command
@@ -232,7 +244,7 @@ def _derive_process_name(app_name, resolved_executable, configured_target):
 
     executable_name = Path(resolved_executable).name if resolved_executable else ""
     if executable_name.lower() == "update.exe":
-        configured_name = Path(shlex.split(configured_target, posix=False)[0]).name
+        configured_name = Path(_split_command(configured_target)[0]).name
         if configured_name:
             return configured_name
 
@@ -297,7 +309,9 @@ def _candidate_paths(executable_lower):
             ]
         )
     elif executable_lower == "riotclientservices.exe":
-        candidates.extend(_riot_client_candidates(program_files, program_files_x86, local_app_data))
+        candidates.extend(
+            _riot_client_candidates(program_files, program_files_x86, local_app_data)
+        )
     elif executable_lower == "discord.exe":
         discord_root = Path(local_app_data) / "Discord"
         if discord_root.exists():
@@ -336,7 +350,9 @@ def _riot_client_candidates(program_files, program_files_x86, local_app_data):
             payload = json.loads(installs_json.read_text(encoding="utf-8"))
             if isinstance(payload, dict):
                 for value in payload.values():
-                    if isinstance(value, str) and value.lower().endswith("riotclientservices.exe"):
+                    if isinstance(value, str) and value.lower().endswith(
+                        "riotclientservices.exe"
+                    ):
                         candidates.append(value)
         except Exception as exc:
             logging.warning("Cannot parse RiotClientInstalls.json: %s", exc)
@@ -347,3 +363,35 @@ def _riot_client_candidates(program_files, program_files_x86, local_app_data):
             candidates.append(str(candidate))
 
     return candidates
+
+
+def _split_command(target):
+    """Parse Windows command lines without passing quote delimiters as arguments."""
+    if isinstance(target, list):
+        if not target or not all(isinstance(arg, str) and arg for arg in target):
+            raise ValueError("Invalid command arguments")
+        return target.copy()
+    if not isinstance(target, str) or not target.strip():
+        raise ValueError("Empty command")
+    # CommandLineToArgvW implements Windows quoting/backslash rules, including
+    # quoted paths and escaped quotes. The returned allocation must be freed.
+    if os.name == "nt":
+        from ctypes import wintypes
+
+        parse = ctypes.windll.shell32.CommandLineToArgvW
+        parse.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_int)]
+        parse.restype = ctypes.POINTER(wintypes.LPWSTR)
+        count = ctypes.c_int()
+        argv = parse(target.strip(), ctypes.byref(count))
+        if not argv:
+            raise ValueError("Cannot parse command")
+        try:
+            return [argv[i] for i in range(count.value)]
+        finally:
+            free = ctypes.windll.kernel32.LocalFree
+            free.argtypes = [ctypes.c_void_p]
+            free.restype = ctypes.c_void_p
+            free(argv)
+    import shlex
+
+    return shlex.split(target)
